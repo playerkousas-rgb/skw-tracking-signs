@@ -146,3 +146,25 @@ export function clearW(id:number){if(id>=0&&navigator.geolocation)navigator.geol
 export function vibrate(pattern: number | number[] = [100, 50, 100, 50, 200]): void {
   try { if (navigator.vibrate) navigator.vibrate(pattern); } catch {}
 }
+// 將整條路線數據轉換為可分享的字串 (Base64)
+export const exportGameToString = (game: GameConfig): string => {
+  try {
+    const jsonString = JSON.stringify(game);
+    // 使用 encodeURIComponent 處理中文，再轉 Base64
+    return btoa(encodeURIComponent(jsonString));
+  } catch (e) {
+    console.error("導出失敗", e);
+    return "";
+  }
+};
+
+// 將字串還原為路線數據
+export const importGameFromString = (dataString: string): GameConfig | null => {
+  try {
+    const jsonString = decodeURIComponent(atob(dataString));
+    return JSON.parse(jsonString) as GameConfig;
+  } catch (e) {
+    console.error("導入失敗", e);
+    return null;
+  }
+};
