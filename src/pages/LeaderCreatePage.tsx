@@ -77,7 +77,6 @@ const LeaderCreatePage: React.FC = () => {
     try {
       const p = await getCurrentPosition();
       setGpsLat(p.lat); setGpsLng(p.lng);
-      setMapOpen(true);
     } catch (e: unknown) {
       setGpsErr(e instanceof Error ? e.message : '定位失敗');
     } finally { setGpsLoading(false); }
@@ -92,7 +91,7 @@ const LeaderCreatePage: React.FC = () => {
     setConfigPaces(sign?.needsPaces ? 6 : 0);
     setConfigContent('');
     setConfigStep({ signId });
-    setMapOpen(true);
+    // 不自動開地圖 — 用戶自己需要時才開
   };
 
   const mapClick = (lat: number, lng: number) => {
@@ -127,7 +126,7 @@ const LeaderCreatePage: React.FC = () => {
     setConfigPaces(s.paces || (sign?.needsPaces ? 6 : 0));
     setConfigContent(s.hiddenContent || '');
     setConfigStep({ signId: s.signId, lat: s.lat, lng: s.lng });
-    setMapOpen(true);
+    // 不自動開地圖
   };
 
   const removeStep = (i: number) => setSteps(prev => prev.filter((_, j) => j !== i));
@@ -168,7 +167,7 @@ const LeaderCreatePage: React.FC = () => {
           className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-sm" />
       </div>
 
-      {/* ── 可開合地圖 ── */}
+      {/* ── 可開合地圖（純手動開關，不會自動彈出） ── */}
       <div>
         <button
           onClick={() => setMapOpen(!mapOpen)}
@@ -176,7 +175,7 @@ const LeaderCreatePage: React.FC = () => {
         >
           <span className="flex items-center gap-2 text-xs font-heading font-medium">
             <MapIcon size={14} className="text-cyan" />
-            地圖標記位置（防迷路）
+            地圖標記位置（需要時才開）
             {hasCoords.length > 0 && <span className="text-[10px] text-cyan">{hasCoords.length}點</span>}
           </span>
           <span className="flex items-center gap-2">
@@ -198,11 +197,7 @@ const LeaderCreatePage: React.FC = () => {
               className="overflow-hidden"
             >
               <div className="mt-2 space-y-1.5">
-                {configStep && !configStep.lat && (
-                  <div className="p-2 bg-green/10 border border-green/20 rounded-xl text-[10px] text-green font-heading flex items-center gap-1.5">
-                    <Navigation size={12} /> 點擊地圖放置符號位置，或留空跳過
-                  </div>
-                )}
+                {gpsErr && <p className="text-[10px] text-red">{gpsErr}</p>}
                 <div className="rounded-2xl overflow-hidden border border-cyan/10" style={{ height: 220 }}>
                   <MapContainer center={[initLat, initLng]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
                     <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
@@ -282,7 +277,7 @@ const LeaderCreatePage: React.FC = () => {
 
       <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
         <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">提示：</strong>起點通常「沿此路前進」，終點必須「已回家」。地圖只標點不畫線，隊員靠觀察符號前進。
+          💡 <strong className="text-steel-light">提示：</strong>起點通常「沿此路前進」，終點必須「已回家」。需要標地圖位置時手動展開上方地圖，點擊即可標記。
         </p>
       </div>
 
@@ -410,7 +405,16 @@ const LeaderCreatePage: React.FC = () => {
                         className="ml-auto text-steel hover:text-red"><X size={14} /></button>
                     </div>
                   ) : (
-                    <p className="text-[10px] text-steel">展開地圖後點擊放置，或直接確認跳過</p>
+                    <div>
+                      <p className="text-[10px] text-steel mb-1.5">關閉此視窗後，手動展開上方地圖再點擊標記</p>
+                      <button
+                        type="button"
+                        onClick={() => { setMapOpen(true); }}
+                        className="text-[10px] text-cyan underline hover:text-cyan/80"
+                      >
+                        一鍵展開地圖
+                      </button>
+                    </div>
                   )}
                 </div>
 
