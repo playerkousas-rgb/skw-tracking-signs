@@ -15,6 +15,10 @@ export interface Trail {
   name: string;
   steps: TrailStep[];
   createdAt: number;
+  // 安全地圖參考點：只作防迷路／集合點用途，不是符號位置
+  safetyLat?: number;
+  safetyLng?: number;
+  safetyNote?: string;
 }
 
 export interface TrailResult {
@@ -74,7 +78,19 @@ export function saveResult(r: TrailResult): void {
 }
 
 export function encodeTrail(trail: Trail): string {
-  try { return btoa(encodeURIComponent(JSON.stringify(trail))); } catch { return ''; }
+  try {
+    // QR/分享時不要輸出每個符號的座標；追蹤活動不應變成按地圖尋寶。
+    const safeTrail: Trail = {
+      ...trail,
+      steps: trail.steps.map(({ signId, direction, paces, hiddenContent }) => ({
+        signId,
+        ...(direction ? { direction } : {}),
+        ...(paces != null ? { paces } : {}),
+        ...(hiddenContent ? { hiddenContent } : {}),
+      })),
+    };
+    return btoa(encodeURIComponent(JSON.stringify(safeTrail)));
+  } catch { return ''; }
 }
 
 export function decodeTrail(str: string): Trail | null {

@@ -14,12 +14,11 @@ import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl, shadowUrl, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const makeStepMarker = (num: number, isCurrent: boolean): L.DivIcon => {
-  const size = isCurrent ? 40 : 28;
+const safetyIcon: L.DivIcon = (() => {
   const el = document.createElement('div');
-  el.innerHTML = `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${isCurrent ? '#00d4ff' : '#082256'};border:2px solid ${isCurrent ? '#00d4ff' : '#3a5068'};box-shadow:${isCurrent ? '0 0 16px rgba(0,212,255,0.5)' : '0 0 4px rgba(0,212,255,0.15)'};font-family:Fredoka,sans-serif;font-size:${isCurrent ? '13' : '9'}px;font-weight:700;color:${isCurrent ? '#02133E' : '#7ba8cc'};">${num}</div>`;
-  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
-};
+  el.innerHTML = '<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#00ff88;border:3px solid white;box-shadow:0 0 16px rgba(0,255,136,0.55);font-family:Fredoka,sans-serif;font-size:11px;font-weight:800;color:#02133E;">SAFE</div>';
+  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [34, 34], iconAnchor: [17, 17] });
+})();
 
 const meIcon: L.DivIcon = (() => {
   const el = document.createElement('div');
@@ -93,9 +92,8 @@ const TrailWalkPage: React.FC = () => {
 
   const handleNext = () => {
     if (!trail) return;
-    const curOk = isCorrect === true;
     if (step + 1 >= trail.steps.length) {
-      const c = answers.filter(a => a.correct).length + (curOk ? 1 : 0);
+      const c = answers.filter(a => a.correct).length;
       saveResult({ playerName, trailId: trail.id, answers, totalSteps: trail.steps.length, correctSteps: c, completedAt: Date.now() });
       setDone(true);
       if (c === trail.steps.length) { setConfetti(true); setTimeout(() => setConfetti(false), 4000); }
@@ -167,10 +165,12 @@ const TrailWalkPage: React.FC = () => {
   const sign = getSignById(trail.steps[step]?.signId);
   const curStep = trail.steps[step];
   const prog = ((step + (selected !== null ? 1 : 0)) / trail.steps.length) * 100;
-  const stepCoords: [number, number][] = trail.steps
-    .filter(s => s.lat != null && s.lng != null)
-    .map(s => [s.lat!, s.lng!]);
-  const hasCoords = stepCoords.length > 0;
+  const safetyCoord = trail.safetyLat != null && trail.safetyLng != null
+    ? ([trail.safetyLat, trail.safetyLng] as [number, number])
+    : null;
+  const mapCenter: [number, number] = myLat != null && myLng != null
+    ? [myLat, myLng]
+    : safetyCoord || [22.3193, 114.1694];
 
   const dirLabel = curStep?.direction === 'left' ? '箭頭指向左方' :
     curStep?.direction === 'right' ? '箭頭指向右方' :
@@ -187,27 +187,24 @@ const TrailWalkPage: React.FC = () => {
             initial={{ width: 0 }} animate={{ width: `${prog}%` }} transition={{ duration: 0.5 }} />
         </div>
         <span className="text-[10px] text-steel font-mono shrink-0">{step + 1}/{trail.steps.length}</span>
-        {hasCoords && (
-          <button onClick={() => setMapOpen(!mapOpen)}
-            className={`shrink-0 px-2 py-1 rounded-full text-[10px] font-heading font-bold flex items-center gap-1 transition-all ${mapOpen ? 'bg-cyan text-navy-950' : 'bg-navy-800 text-steel border border-cyan/10'}`}>
-            <MapIcon size={11} />{mapOpen ? '收地圖' : '地圖'}
-          </button>
-        )}
+        <button onClick={() => setMapOpen(!mapOpen)}
+          className={`shrink-0 px-2 py-1 rounded-full text-[10px] font-heading font-bold flex items-center gap-1 transition-all ${mapOpen ? 'bg-cyan text-navy-950' : 'bg-navy-800 text-steel border border-cyan/10'}`}>
+          <MapIcon size={11} />{mapOpen ? '收地圖' : '地圖'}
+        </button>
       </div>
 
-      {/* ── 地圖（預設展開） ── */}
-      {hasCoords && (
-        <AnimatePresence>
-          {mapOpen && (
+      {/* ── 防迷路地圖（預設展開，不顯示符號位置） ── */}
+      <AnimatePresence>
+        {mapOpen && (
             <motion.div
               initial={{ height: 0, opacity: 0, marginBottom: 0 }}
               animate={{ height: 170, opacity: 1, marginBottom: 10 }}
               exit={{ height: 0, opacity: 0, marginBottom: 0 }}
               transition={{ duration: 0.2 }}
-              className="mx-4 rounded-2xl overflow-hidden border border-cyan/10"
+              className="relative mx-4 rounded-2xl overflow-hidden border border-cyan/10"
             >
               <MapContainer
-                center={stepCoords[step] || stepCoords[0] || [22.3193, 114.1694]}
+                center={mapCenter}
                 zoom={16}
                 style={{ height: '100%', width: '100%' }}
                 zoomControl={false}
@@ -218,9 +215,7 @@ const TrailWalkPage: React.FC = () => {
                 {myLat != null && myLng != null && (
                   <Marker position={[myLat, myLng]} icon={meIcon} />
                 )}
-                {stepCoords.map((c, i) => (
-                  <Marker key={i} position={c} icon={makeStepMarker(i + 1, i === step)} />
-                ))}
+                {safetyCoord && <Marker position={safetyCoord} icon={safetyIcon} />}
               </MapContainer>
               {/* GPS indicator */}
               {myLat != null ? (
@@ -232,14 +227,18 @@ const TrailWalkPage: React.FC = () => {
                   <Navigation size={9} />等待GPS...
                 </div>
               )}
-              {/* Current step label */}
+              {/* Safety label */}
               <div className="absolute top-1.5 right-1.5 bg-navy-950/80 backdrop-blur rounded-full px-2 py-0.5 text-[9px] text-cyan z-[1000]">
-                第 {step + 1} 點 ▸ {sign?.nameZh}
+                防迷路地圖 · 不顯示符號位置
               </div>
+              {safetyCoord && trail.safetyNote && (
+                <div className="absolute top-7 right-1.5 max-w-[70%] bg-navy-950/80 backdrop-blur rounded-xl px-2 py-1 text-[9px] text-green z-[1000] text-right">
+                  SAFE：{trail.safetyNote}
+                </div>
+              )}
             </motion.div>
-          )}
-        </AnimatePresence>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* ── 主畫面 ── */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 pb-6">
@@ -250,8 +249,8 @@ const TrailWalkPage: React.FC = () => {
                 <Footprints size={40} className="text-cyan mx-auto mb-3" />
               </motion.div>
               <p className="text-steel text-sm animate-blink">觀察前方地面...</p>
-              {hasCoords && !mapOpen && (
-                <p className="text-[10px] text-steel mt-2">💡 按上方「地圖」查看你的位置</p>
+              {!mapOpen && (
+                <p className="text-[10px] text-steel mt-2">💡 按上方「地圖」查看你的位置；地圖不會標出符號。</p>
               )}
             </motion.div>
           ) : (

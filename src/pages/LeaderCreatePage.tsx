@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, X, Navigation, Loader2, AlertCircle, Edit3, MoveUp, MoveDown, ArrowUp, ArrowLeft as ArrowLeftIcon, ArrowRight, Map as MapIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Plus, X, Navigation, Loader2, AlertCircle, Edit3, MoveUp, MoveDown, ArrowUp, ArrowLeft as ArrowLeftIcon, ArrowRight, Map as MapIcon, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import SignSVG from '../components/SignSVG';
@@ -13,17 +13,15 @@ import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl, shadowUrl, iconSize: [25, 41], iconAnchor: [12, 41] });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const makePin = (num: number): L.DivIcon => {
+const safetyIcon: L.DivIcon = (() => {
   const el = document.createElement('div');
-  el.innerHTML = `<div style="position:relative;width:36px;height:48px;display:flex;align-items:center;justify-content:center;">
-    <div style="position:absolute;bottom:0;width:28px;height:28px;border-radius:50%;background:#041a3a;border:2px solid #00d4ff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(0,212,255,0.4);"><span style="color:#00d4ff;font-family:Fredoka,sans-serif;font-size:12px;font-weight:700;">${num}</span></div>
-    <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:10px solid #00d4ff;filter:drop-shadow(0 0 4px rgba(0,212,255,0.5));"></div></div>`;
-  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [36, 48], iconAnchor: [18, 48] });
-};
+  el.innerHTML = `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#00ff88;border:3px solid #ffffff;box-shadow:0 0 16px rgba(0,255,136,0.55);font-family:Fredoka,sans-serif;font-size:11px;font-weight:800;color:#02133E;">SAFE</div>`;
+  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [34, 34], iconAnchor: [17, 17] });
+})();
 
 const posIcon: L.DivIcon = (() => {
   const el = document.createElement('div');
-  el.innerHTML = '<div style="width:18px;height:18px;border-radius:50%;background:#00ff88;border:3px solid white;box-shadow:0 0 14px rgba(0,255,136,0.6);"></div>';
+  el.innerHTML = '<div style="width:18px;height:18px;border-radius:50%;background:#00d4ff;border:3px solid white;box-shadow:0 0 14px rgba(0,212,255,0.6);"></div>';
   return L.divIcon({ html: el.innerHTML, className: '', iconSize: [18, 18], iconAnchor: [9, 9] });
 })();
 
@@ -53,7 +51,9 @@ const LeaderCreatePage: React.FC = () => {
   const existing = editId ? getTrailById(editId) : null;
 
   const [name, setName] = useState(existing?.name || '');
-  const [steps, setSteps] = useState<TrailStep[]>(existing?.steps || []);
+  const [steps, setSteps] = useState<TrailStep[]>(
+    (existing?.steps || []).map(({ signId, direction, paces, hiddenContent }) => ({ signId, direction, paces, hiddenContent }))
+  );
   const [error, setError] = useState('');
   const [gpsLat, setGpsLat] = useState<number | null>(null);
   const [gpsLng, setGpsLng] = useState<number | null>(null);
@@ -61,16 +61,19 @@ const LeaderCreatePage: React.FC = () => {
   const [gpsErr, setGpsErr] = useState('');
 
   const [showPicker, setShowPicker] = useState(false);
-  const [configStep, setConfigStep] = useState<{ signId: number; lat?: number; lng?: number } | null>(null);
+  const [configStep, setConfigStep] = useState<{ signId: number } | null>(null);
   const [configDirection, setConfigDirection] = useState<Direction>('forward');
   const [configPaces, setConfigPaces] = useState(6);
   const [configContent, setConfigContent] = useState('');
   const [editIdx, setEditIdx] = useState<number | null>(null);
 
   const [mapOpen, setMapOpen] = useState(false);
+  const [safetyLat, setSafetyLat] = useState<number | null>(existing?.safetyLat ?? null);
+  const [safetyLng, setSafetyLng] = useState<number | null>(existing?.safetyLng ?? null);
+  const [safetyNote, setSafetyNote] = useState(existing?.safetyNote || '');
 
-  const initLat = existing?.steps.find(s => s.lat != null)?.lat ?? DEFAULT_CENTER[0];
-  const initLng = existing?.steps.find(s => s.lng != null)?.lng ?? DEFAULT_CENTER[1];
+  const initLat = safetyLat ?? DEFAULT_CENTER[0];
+  const initLng = safetyLng ?? DEFAULT_CENTER[1];
 
   const requestGps = useCallback(async () => {
     setGpsLoading(true); setGpsErr('');
@@ -82,6 +85,18 @@ const LeaderCreatePage: React.FC = () => {
     } finally { setGpsLoading(false); }
   }, []);
 
+  const useGpsAsSafetyPoint = useCallback(async () => {
+    setGpsLoading(true); setGpsErr('');
+    try {
+      const p = await getCurrentPosition();
+      setGpsLat(p.lat); setGpsLng(p.lng);
+      setSafetyLat(p.lat); setSafetyLng(p.lng);
+      if (!safetyNote.trim()) setSafetyNote('集合點 / 安全返回點');
+    } catch (e: unknown) {
+      setGpsErr(e instanceof Error ? e.message : '定位失敗');
+    } finally { setGpsLoading(false); }
+  }, [safetyNote]);
+
   useEffect(() => { requestGps(); }, [requestGps]);
 
   const pickSign = (signId: number) => {
@@ -91,13 +106,12 @@ const LeaderCreatePage: React.FC = () => {
     setConfigPaces(sign?.needsPaces ? 6 : 0);
     setConfigContent('');
     setConfigStep({ signId });
-    // 不自動開地圖 — 用戶自己需要時才開
   };
 
   const mapClick = (lat: number, lng: number) => {
-    if (configStep) {
-      setConfigStep(prev => prev ? { ...prev, lat, lng } : null);
-    }
+    setSafetyLat(lat);
+    setSafetyLng(lng);
+    if (!safetyNote.trim()) setSafetyNote('集合點 / 安全返回點');
   };
 
   const confirmStep = () => {
@@ -107,7 +121,6 @@ const LeaderCreatePage: React.FC = () => {
     if (sign?.needsDirection) step.direction = configDirection;
     if (sign?.needsPaces) step.paces = configPaces;
     if (configContent.trim()) step.hiddenContent = configContent.trim();
-    if (configStep.lat != null) { step.lat = configStep.lat; step.lng = configStep.lng; }
 
     if (editIdx !== null) {
       setSteps(prev => { const n = [...prev]; n[editIdx] = step; return n; });
@@ -125,8 +138,7 @@ const LeaderCreatePage: React.FC = () => {
     setConfigDirection(s.direction || 'forward');
     setConfigPaces(s.paces || (sign?.needsPaces ? 6 : 0));
     setConfigContent(s.hiddenContent || '');
-    setConfigStep({ signId: s.signId, lat: s.lat, lng: s.lng });
-    // 不自動開地圖
+    setConfigStep({ signId: s.signId });
   };
 
   const removeStep = (i: number) => setSteps(prev => prev.filter((_, j) => j !== i));
@@ -141,7 +153,14 @@ const LeaderCreatePage: React.FC = () => {
     if (!name.trim()) { setError('請輸入路線名稱'); return; }
     if (steps.length < 2) { setError('至少需要2個符號（起點和終點）'); return; }
     if (steps[steps.length - 1].signId !== 4) { setError('路線最後一個符號必須是「已回家」'); return; }
-    saveTrail({ id: existing?.id || generateTrailId(), name: name.trim(), steps, createdAt: existing?.createdAt || Date.now() });
+    saveTrail({
+      id: existing?.id || generateTrailId(),
+      name: name.trim(),
+      steps,
+      createdAt: existing?.createdAt || Date.now(),
+      ...(safetyLat != null && safetyLng != null ? { safetyLat, safetyLng } : {}),
+      ...(safetyNote.trim() ? { safetyNote: safetyNote.trim() } : {}),
+    });
     nav('/leader');
   };
 
@@ -152,7 +171,7 @@ const LeaderCreatePage: React.FC = () => {
     { key: 'end' as const, label: '結束標記' },
   ];
 
-  const hasCoords = steps.filter(s => s.lat != null && s.lng != null);
+  const hasSafetyPoint = safetyLat != null && safetyLng != null;
 
   return (
     <div className="space-y-4">
@@ -167,7 +186,7 @@ const LeaderCreatePage: React.FC = () => {
           className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-sm" />
       </div>
 
-      {/* ── 可開合地圖（純手動開關，不會自動彈出） ── */}
+      {/* ── 防迷路地圖：只標安全參考點，不標符號位置 ── */}
       <div>
         <button
           onClick={() => setMapOpen(!mapOpen)}
@@ -175,14 +194,14 @@ const LeaderCreatePage: React.FC = () => {
         >
           <span className="flex items-center gap-2 text-xs font-heading font-medium">
             <MapIcon size={14} className="text-cyan" />
-            地圖標記位置（需要時才開）
-            {hasCoords.length > 0 && <span className="text-[10px] text-cyan">{hasCoords.length}點</span>}
+            防迷路地圖（不標示符號）
+            {hasSafetyPoint && <span className="text-[10px] text-green">已設定安全點</span>}
           </span>
           <span className="flex items-center gap-2">
-            <button onClick={(e) => { e.stopPropagation(); requestGps(); }} disabled={gpsLoading}
+            <span onClick={(e) => { e.stopPropagation(); requestGps(); }}
               className="flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan/10 text-cyan text-[10px] font-heading border border-cyan/20">
               {gpsLoading ? <Loader2 size={10} className="animate-spin" /> : <Navigation size={10} />}定位
-            </button>
+            </span>
             {mapOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </span>
         </button>
@@ -196,22 +215,33 @@ const LeaderCreatePage: React.FC = () => {
               transition={{ duration: 0.25 }}
               className="overflow-hidden"
             >
-              <div className="mt-2 space-y-1.5">
+              <div className="mt-2 space-y-2">
                 {gpsErr && <p className="text-[10px] text-red">{gpsErr}</p>}
-                <div className="rounded-2xl overflow-hidden border border-cyan/10" style={{ height: 220 }}>
+                <div className="relative rounded-2xl overflow-hidden border border-cyan/10" style={{ height: 220 }}>
                   <MapContainer center={[initLat, initLng]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
                     <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
                     {gpsLat != null && gpsLng != null && <RecenterOnce lat={gpsLat} lng={gpsLng} />}
                     {gpsLat != null && gpsLng != null && <Marker position={[gpsLat, gpsLng]} icon={posIcon} />}
+                    {hasSafetyPoint && <Marker position={[safetyLat!, safetyLng!]} icon={safetyIcon} />}
                     <MapClickHandler onClick={mapClick} />
-                    {configStep?.lat != null && configStep.lng != null && (
-                      <Marker position={[configStep.lat, configStep.lng]} icon={makePin(steps.length + 1)} />
-                    )}
-                    {hasCoords.map((s, i) => (
-                      <Marker key={i} position={[s.lat!, s.lng!]} icon={makePin(i + 1)} />
-                    ))}
                   </MapContainer>
+                  <div className="absolute left-2 right-2 top-2 z-[1000] rounded-xl bg-navy-950/90 border border-green/20 p-2 backdrop-blur">
+                    <p className="text-[11px] text-green font-heading font-semibold flex items-center gap-1 justify-center"><ShieldCheck size={12} /> 點地圖設定集合點／安全返回點</p>
+                    <p className="text-[9px] text-steel text-center mt-0.5">隊員端只會看到安全參考，不會看到任何追蹤符號位置。</p>
+                  </div>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={useGpsAsSafetyPoint} disabled={gpsLoading}
+                    className="py-2 rounded-xl bg-green/10 text-green border border-green/20 text-[10px] font-heading font-semibold disabled:opacity-50">
+                    {gpsLoading ? '定位中...' : '用目前GPS作安全點'}
+                  </button>
+                  <button type="button" onClick={() => { setSafetyLat(null); setSafetyLng(null); }}
+                    className="py-2 rounded-xl bg-navy-800 text-steel border border-steel/10 text-[10px] font-heading font-semibold">
+                    清除安全點
+                  </button>
+                </div>
+                <input value={safetyNote} onChange={e => setSafetyNote(e.target.value)} placeholder="安全點說明：例：公園入口集合 / 迷路回到此處"
+                  className="w-full px-3 py-2.5 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-xs" />
               </div>
             </motion.div>
           )}
@@ -277,7 +307,7 @@ const LeaderCreatePage: React.FC = () => {
 
       <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
         <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">提示：</strong>起點通常「沿此路前進」，終點必須「已回家」。需要標地圖位置時手動展開上方地圖，點擊即可標記。
+          💡 <strong className="text-steel-light">提示：</strong>這是追蹤，不是尋寶。地圖只用作防迷路，請不要把追蹤符號位置標在地圖上；隊員應靠觀察地面符號前進。
         </p>
       </div>
 
@@ -394,28 +424,6 @@ const LeaderCreatePage: React.FC = () => {
                     placeholder={s.category === 'end' ? '例：恭喜完成！去涼亭找領袖領取獎章🏅' : s.needsPaces ? '例：大樹下的紅色盒子' : '例：檢查哨密碼：SKW2026'}
                     className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-sm"
                   />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-xs text-steel font-heading mb-2">地圖位置</label>
-                  {configStep.lat != null ? (
-                    <div className="flex items-center gap-2 p-2.5 bg-green/5 border border-green/10 rounded-xl text-xs text-green">
-                      <Navigation size={14} /> {configStep.lat.toFixed(5)}, {configStep.lng!.toFixed(5)}
-                      <button onClick={() => setConfigStep(prev => prev ? { ...prev, lat: undefined, lng: undefined } : null)}
-                        className="ml-auto text-steel hover:text-red"><X size={14} /></button>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-[10px] text-steel mb-1.5">關閉此視窗後，手動展開上方地圖再點擊標記</p>
-                      <button
-                        type="button"
-                        onClick={() => { setMapOpen(true); }}
-                        className="text-[10px] text-cyan underline hover:text-cyan/80"
-                      >
-                        一鍵展開地圖
-                      </button>
-                    </div>
-                  )}
                 </div>
 
                 <button onClick={confirmStep}
