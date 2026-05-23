@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, XCircle, ArrowRight, Trophy, Footprints, Map as MapIcon, Navigation, Gift } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowRight, Trophy, Footprints, Map as MapIcon, Navigation, Gift, ChevronDown, ChevronUp } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import SignSVG from '../components/SignSVG';
@@ -9,7 +9,6 @@ import Confetti from '../components/Confetti';
 import { getTrailById, saveResult, watchPosition, clearWatch } from '../lib/trailStore';
 import { getSignById, trackingSigns } from '../data/trackingSigns';
 
-// Fix Leaflet icon
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl, shadowUrl, iconSize: [25, 41], iconAnchor: [12, 41] });
@@ -24,8 +23,8 @@ const makeStepMarker = (num: number, isCurrent: boolean): L.DivIcon => {
 
 const meIcon: L.DivIcon = (() => {
   const el = document.createElement('div');
-  el.innerHTML = '<div style="width:14px;height:14px;border-radius:50%;background:#00ff88;border:2.5px solid white;box-shadow:0 0 10px rgba(0,255,136,0.5);"></div>';
-  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [14, 14], iconAnchor: [7, 7] });
+  el.innerHTML = '<div style="width:18px;height:18px;border-radius:50%;background:#00ff88;border:3px solid white;box-shadow:0 0 14px rgba(0,255,136,0.6);"></div>';
+  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [18, 18], iconAnchor: [9, 9] });
 })();
 
 const RecenterMap: React.FC<{ lat: number; lng: number }> = ({ lat, lng }) => {
@@ -59,7 +58,7 @@ const TrailWalkPage: React.FC = () => {
   const [done, setDone] = useState(false);
   const [confetti, setConfetti] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [showMap, setShowMap] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [myLat, setMyLat] = useState<number | null>(null);
   const [myLng, setMyLng] = useState<number | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -95,7 +94,6 @@ const TrailWalkPage: React.FC = () => {
     setSelected(action); setIsCorrect(correct);
     setAnswers(prev => [...prev, { signId: trail!.steps[step].signId, correct }]);
     try { navigator.vibrate?.(correct ? [50] : [150, 80, 150]); } catch {}
-    // If correct and there's hidden content, reveal after a delay
     if (correct && trail?.steps[step]?.hiddenContent) {
       setTimeout(() => setShowHidden(true), 800);
     }
@@ -139,8 +137,6 @@ const TrailWalkPage: React.FC = () => {
           </motion.div>
           <h1 className="text-2xl font-heading font-bold text-ice mb-1">{allOk ? '追蹤完成！' : '路線結束'}</h1>
           <p className="text-steel text-sm mb-2">{playerName}，你已完成「{trail.name}」</p>
-
-          {/* Final hidden content */}
           {finalContent && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
               className="mb-4 p-4 bg-gold/5 border border-gold/20 rounded-2xl">
@@ -149,7 +145,6 @@ const TrailWalkPage: React.FC = () => {
               <p className="text-ice text-sm mt-1 leading-relaxed">{finalContent}</p>
             </motion.div>
           )}
-
           <div className="relative w-28 h-28 mx-auto mb-4">
             <svg viewBox="0 0 120 120" className="w-28 h-28 -rotate-90">
               <circle cx="60" cy="60" r="52" fill="none" stroke="#0d1f3c" strokeWidth="8" />
@@ -182,7 +177,6 @@ const TrailWalkPage: React.FC = () => {
     .map(s => [s.lat!, s.lng!]);
   const hasCoords = stepCoords.length > 0;
 
-  // Direction label for display
   const dirLabel = curStep?.direction === 'left' ? '（箭頭指向左方）' :
     curStep?.direction === 'right' ? '（箭頭指向右方）' :
     curStep?.direction === 'forward' ? '（箭頭指向前方）' : '';
@@ -199,27 +193,31 @@ const TrailWalkPage: React.FC = () => {
         </div>
         <span className="text-xs text-steel font-mono">{step + 1}/{trail.steps.length}</span>
         {hasCoords && (
-          <button onClick={() => setShowMap(!showMap)}
-            className={`px-2.5 py-1.5 rounded-full text-[10px] font-heading font-bold flex items-center gap-1 transition-all ${showMap ? 'bg-cyan text-navy-950' : 'bg-navy-800 text-steel border border-cyan/10'}`}>
-            <MapIcon size={12} />{showMap ? '隱藏' : '地圖'}
+          <button onClick={() => setMapOpen(!mapOpen)}
+            className={`px-2.5 py-1.5 rounded-full text-[10px] font-heading font-bold flex items-center gap-1 transition-all ${mapOpen ? 'bg-cyan text-navy-950' : 'bg-navy-800 text-steel border border-cyan/10'}`}>
+            <MapIcon size={12} />{mapOpen ? '收起' : '地圖'}
           </button>
         )}
       </div>
 
-      {/* Map — markers only, NO polyline */}
+      {/* ── 可開合地圖（預設收起） ── */}
       <AnimatePresence>
-        {showMap && hasCoords && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 180, opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="relative z-10 mx-4 mb-3 rounded-2xl overflow-hidden border border-cyan/10">
+        {mapOpen && hasCoords && (
+          <motion.div
+            initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+            animate={{ height: 190, opacity: 1, marginBottom: 12 }}
+            exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+            transition={{ duration: 0.25 }}
+            className="relative z-10 mx-4 rounded-2xl overflow-hidden border border-cyan/10"
+          >
             <MapContainer center={stepCoords[step] || stepCoords[0] || [22.3193, 114.1694]} zoom={15}
               style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
               {myLat != null && myLng != null && <RecenterMap lat={myLat} lng={myLng} />}
               {myLat != null && myLng != null && <Marker position={[myLat, myLng]} icon={meIcon} />}
               {stepCoords.map((c, i) => (
                 <Marker key={i} position={c} icon={makeStepMarker(i + 1, i === step)} />
               ))}
-              {/* No Polyline — members must observe signs, not trace a line */}
             </MapContainer>
             {myLat != null && (
               <div className="absolute bottom-2 left-2 bg-navy-950/80 backdrop-blur rounded-full px-2 py-0.5 text-[9px] text-green flex items-center gap-1 z-[1000]">
@@ -242,7 +240,6 @@ const TrailWalkPage: React.FC = () => {
           ) : (
             <motion.div key={`s-${step}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
               className="w-full max-w-sm flex flex-col items-center">
-              {/* Sign + direction arrow */}
               <motion.div initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', damping: 15, stiffness: 200 }} className="mb-3 relative">
                 <div className="absolute inset-0 rounded-full bg-navy-900/80 blur-xl" />
@@ -307,7 +304,6 @@ const TrailWalkPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Hidden content reveal */}
                   <AnimatePresence>
                     {showHidden && curStep.hiddenContent && (
                       <motion.div initial={{ opacity: 0, y: 12, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}

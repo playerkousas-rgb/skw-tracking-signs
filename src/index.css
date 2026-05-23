@@ -134,14 +134,10 @@ html { scroll-behavior: smooth; }
 /* Safe area for mobile */
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
 
-/* ── Leaflet overrides (dark theme) ── */
+/* ── Leaflet overrides (light tiles, visible) ── */
 .leaflet-container {
-  background: #02133E !important;
+  background: #e8e4df !important;
   font-family: var(--font-body) !important;
-}
-/* CartoDB dark tiles already look good; these are for default tiles fallback */
-.leaflet-tile-pane {
-  filter: brightness(0.55) invert(0) contrast(1.1) saturate(0.4) hue-rotate(180deg) brightness(0.8);
 }
 .leaflet-control-zoom { display: none !important; }
 .leaflet-control-attribution { display: none !important; }

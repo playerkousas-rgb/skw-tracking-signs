@@ -6,8 +6,8 @@ export interface TrackingSign {
   action: string;
   isWarning?: boolean;
   category: 'direction' | 'warning' | 'info' | 'end';
-  needsDirection?: boolean; // 需要配箭頭方向（前方有水/前方障礙/信物在前）
-  needsPaces?: boolean;     // 需要設定步數（信物在前）
+  needsDirection?: boolean;
+  needsPaces?: boolean;
 }
 
 export const trackingSigns: TrackingSign[] = [
@@ -85,4 +85,16 @@ export function getSignById(id: number): TrackingSign | undefined {
 
 export function getSignsByCategory(cat: TrackingSign['category']): TrackingSign[] {
   return trackingSigns.filter(s => s.category === cat);
+}
+
+// 保留給舊頁面過渡用（QuizPage / PlayPage），刪除舊頁面後可移除
+export function getRandomSigns(count: number): TrackingSign[] {
+  return [...trackingSigns].sort(() => Math.random() - 0.5).slice(0, count);
+}
+
+export function getWrongOptions(correct: TrackingSign, count = 3): TrackingSign[] {
+  return trackingSigns
+    .filter(s => s.id !== correct.id)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, count);
 }

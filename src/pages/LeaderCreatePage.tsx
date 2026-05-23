@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, X, Navigation, Loader2, AlertCircle, Edit3, MoveUp, MoveDown, ArrowUp, ArrowLeft as ArrowLeftIcon, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Plus, X, Navigation, Loader2, AlertCircle, Edit3, MoveUp, MoveDown, ArrowUp, ArrowLeft as ArrowLeftIcon, ArrowRight, Map as MapIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import SignSVG from '../components/SignSVG';
 import { trackingSigns, getSignById } from '../data/trackingSigns';
 import { saveTrail, getTrailById, generateTrailId, getCurrentPosition, TrailStep, Direction } from '../lib/trailStore';
 
-// Fix Leaflet icon
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 const DefaultIcon = L.icon({ iconUrl, shadowUrl, iconSize: [25, 41], iconAnchor: [12, 41] });
@@ -17,15 +16,15 @@ L.Marker.prototype.options.icon = DefaultIcon;
 const makePin = (num: number): L.DivIcon => {
   const el = document.createElement('div');
   el.innerHTML = `<div style="position:relative;width:36px;height:48px;display:flex;align-items:center;justify-content:center;">
-    <div style="position:absolute;bottom:0;width:28px;height:28px;border-radius:50%;background:#041a3a;border:2px solid #00d4ff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px rgba(0,212,255,0.3);"><span style="color:#00d4ff;font-family:Fredoka,sans-serif;font-size:12px;font-weight:700;">${num}</span></div>
-    <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:10px solid #00d4ff;"></div></div>`;
+    <div style="position:absolute;bottom:0;width:28px;height:28px;border-radius:50%;background:#041a3a;border:2px solid #00d4ff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 16px rgba(0,212,255,0.4);"><span style="color:#00d4ff;font-family:Fredoka,sans-serif;font-size:12px;font-weight:700;">${num}</span></div>
+    <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:10px solid #00d4ff;filter:drop-shadow(0 0 4px rgba(0,212,255,0.5));"></div></div>`;
   return L.divIcon({ html: el.innerHTML, className: '', iconSize: [36, 48], iconAnchor: [18, 48] });
 };
 
 const posIcon: L.DivIcon = (() => {
   const el = document.createElement('div');
-  el.innerHTML = '<div style="width:16px;height:16px;border-radius:50%;background:#00ff88;border:3px solid white;box-shadow:0 0 12px rgba(0,255,136,0.5);"></div>';
-  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
+  el.innerHTML = '<div style="width:18px;height:18px;border-radius:50%;background:#00ff88;border:3px solid white;box-shadow:0 0 14px rgba(0,255,136,0.6);"></div>';
+  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [18, 18], iconAnchor: [9, 9] });
 })();
 
 const MapClickHandler: React.FC<{ onClick: (lat: number, lng: number) => void }> = ({ onClick }) => {
@@ -61,17 +60,14 @@ const LeaderCreatePage: React.FC = () => {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsErr, setGpsErr] = useState('');
 
-  // Sign picker
   const [showPicker, setShowPicker] = useState(false);
-
-  // After selecting a sign → config modal
   const [configStep, setConfigStep] = useState<{ signId: number; lat?: number; lng?: number } | null>(null);
   const [configDirection, setConfigDirection] = useState<Direction>('forward');
   const [configPaces, setConfigPaces] = useState(6);
   const [configContent, setConfigContent] = useState('');
-
-  // Edit existing step
   const [editIdx, setEditIdx] = useState<number | null>(null);
+
+  const [mapOpen, setMapOpen] = useState(false);
 
   const initLat = existing?.steps.find(s => s.lat != null)?.lat ?? DEFAULT_CENTER[0];
   const initLng = existing?.steps.find(s => s.lng != null)?.lng ?? DEFAULT_CENTER[1];
@@ -81,6 +77,7 @@ const LeaderCreatePage: React.FC = () => {
     try {
       const p = await getCurrentPosition();
       setGpsLat(p.lat); setGpsLng(p.lng);
+      setMapOpen(true);
     } catch (e: unknown) {
       setGpsErr(e instanceof Error ? e.message : '定位失敗');
     } finally { setGpsLoading(false); }
@@ -88,7 +85,6 @@ const LeaderCreatePage: React.FC = () => {
 
   useEffect(() => { requestGps(); }, [requestGps]);
 
-  // When user picks a sign from the picker
   const pickSign = (signId: number) => {
     const sign = getSignById(signId);
     setShowPicker(false);
@@ -96,16 +92,15 @@ const LeaderCreatePage: React.FC = () => {
     setConfigPaces(sign?.needsPaces ? 6 : 0);
     setConfigContent('');
     setConfigStep({ signId });
+    setMapOpen(true);
   };
 
-  // When user clicks map while having a pending config
   const mapClick = (lat: number, lng: number) => {
     if (configStep) {
       setConfigStep(prev => prev ? { ...prev, lat, lng } : null);
     }
   };
 
-  // Confirm the config modal → add step
   const confirmStep = () => {
     if (!configStep) return;
     const sign = getSignById(configStep.signId);
@@ -124,7 +119,6 @@ const LeaderCreatePage: React.FC = () => {
     setConfigStep(null);
   };
 
-  // Edit existing step
   const startEdit = (idx: number) => {
     const s = steps[idx];
     const sign = getSignById(s.signId);
@@ -133,6 +127,7 @@ const LeaderCreatePage: React.FC = () => {
     setConfigPaces(s.paces || (sign?.needsPaces ? 6 : 0));
     setConfigContent(s.hiddenContent || '');
     setConfigStep({ signId: s.signId, lat: s.lat, lng: s.lng });
+    setMapOpen(true);
   };
 
   const removeStep = (i: number) => setSteps(prev => prev.filter((_, j) => j !== i));
@@ -147,11 +142,7 @@ const LeaderCreatePage: React.FC = () => {
     if (!name.trim()) { setError('請輸入路線名稱'); return; }
     if (steps.length < 2) { setError('至少需要2個符號（起點和終點）'); return; }
     if (steps[steps.length - 1].signId !== 4) { setError('路線最後一個符號必須是「已回家」'); return; }
-    saveTrail({
-      id: existing?.id || generateTrailId(),
-      name: name.trim(), steps,
-      createdAt: existing?.createdAt || Date.now(),
-    });
+    saveTrail({ id: existing?.id || generateTrailId(), name: name.trim(), steps, createdAt: existing?.createdAt || Date.now() });
     nav('/leader');
   };
 
@@ -166,52 +157,73 @@ const LeaderCreatePage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => nav('/leader')} className="p-2 -ml-2 rounded-xl text-steel hover:text-ice"><ArrowLeft size={20} /></button>
         <h1 className="text-xl font-heading font-bold text-ice">{existing ? '編輯路線' : '建立路線'}</h1>
       </div>
 
-      {/* Name */}
       <div>
         <label className="block text-xs text-steel mb-1.5 font-heading">路線名稱</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="例：公園樹林追蹤路線"
           className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-sm" />
       </div>
 
-      {/* Map */}
+      {/* ── 可開合地圖 ── */}
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs text-steel font-heading">地圖標記位置（防迷路）</label>
-          <button onClick={requestGps} disabled={gpsLoading}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan/10 text-cyan text-[10px] font-heading border border-cyan/20">
-            {gpsLoading ? <Loader2 size={12} className="animate-spin" /> : <Navigation size={12} />}定位
-          </button>
-        </div>
-        {configStep && !configStep.lat && (
-          <div className="mb-2 p-2.5 bg-green/10 border border-green/20 rounded-xl text-xs text-green font-heading flex items-center gap-2">
-            <Navigation size={14} /> 點擊地圖放置符號位置，或留空跳過
-          </div>
-        )}
-        <div className="rounded-2xl overflow-hidden border border-cyan/10" style={{ height: 200 }}>
-          <MapContainer center={[initLat, initLng]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-            {gpsLat != null && gpsLng != null && <RecenterOnce lat={gpsLat} lng={gpsLng} />}
-            {gpsLat != null && gpsLng != null && <Marker position={[gpsLat, gpsLng]} icon={posIcon} />}
-            <MapClickHandler onClick={mapClick} />
-            {configStep?.lat != null && configStep.lng != null && (
-              <Marker position={[configStep.lat, configStep.lng]} icon={makePin(steps.length + 1)} />
-            )}
-            {hasCoords.map((s, i) => (
-              <Marker key={i} position={[s.lat!, s.lng!]} icon={makePin(i + 1)} />
-            ))}
-            {/* NO POLYLINE - members must observe signs, not follow a line */}
-          </MapContainer>
-        </div>
-        {gpsErr && <p className="text-[10px] text-red mt-1">{gpsErr}</p>}
+        <button
+          onClick={() => setMapOpen(!mapOpen)}
+          className="w-full flex items-center justify-between py-2.5 px-4 bg-navy-800/50 rounded-xl border border-cyan/10 text-steel hover:text-ice transition-colors"
+        >
+          <span className="flex items-center gap-2 text-xs font-heading font-medium">
+            <MapIcon size={14} className="text-cyan" />
+            地圖標記位置（防迷路）
+            {hasCoords.length > 0 && <span className="text-[10px] text-cyan">{hasCoords.length}點</span>}
+          </span>
+          <span className="flex items-center gap-2">
+            <button onClick={(e) => { e.stopPropagation(); requestGps(); }} disabled={gpsLoading}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan/10 text-cyan text-[10px] font-heading border border-cyan/20">
+              {gpsLoading ? <Loader2 size={10} className="animate-spin" /> : <Navigation size={10} />}定位
+            </button>
+            {mapOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </span>
+        </button>
+
+        <AnimatePresence>
+          {mapOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-2 space-y-1.5">
+                {configStep && !configStep.lat && (
+                  <div className="p-2 bg-green/10 border border-green/20 rounded-xl text-[10px] text-green font-heading flex items-center gap-1.5">
+                    <Navigation size={12} /> 點擊地圖放置符號位置，或留空跳過
+                  </div>
+                )}
+                <div className="rounded-2xl overflow-hidden border border-cyan/10" style={{ height: 220 }}>
+                  <MapContainer center={[initLat, initLng]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
+                    <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+                    {gpsLat != null && gpsLng != null && <RecenterOnce lat={gpsLat} lng={gpsLng} />}
+                    {gpsLat != null && gpsLng != null && <Marker position={[gpsLat, gpsLng]} icon={posIcon} />}
+                    <MapClickHandler onClick={mapClick} />
+                    {configStep?.lat != null && configStep.lng != null && (
+                      <Marker position={[configStep.lat, configStep.lng]} icon={makePin(steps.length + 1)} />
+                    )}
+                    {hasCoords.map((s, i) => (
+                      <Marker key={i} position={[s.lat!, s.lng!]} icon={makePin(i + 1)} />
+                    ))}
+                  </MapContainer>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Steps list */}
+      {/* ── 符號列表 ── */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs text-steel font-heading">追蹤符號順序 ({steps.length}個)</label>
@@ -270,7 +282,7 @@ const LeaderCreatePage: React.FC = () => {
 
       <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
         <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">提示：</strong>起點通常「沿此路前進」，終點必須「已回家」。地圖只標位置不畫線，隊員要靠觀察符號前進。
+          💡 <strong className="text-steel-light">提示：</strong>起點通常「沿此路前進」，終點必須「已回家」。地圖只標點不畫線，隊員靠觀察符號前進。
         </p>
       </div>
 
@@ -281,7 +293,7 @@ const LeaderCreatePage: React.FC = () => {
         {existing ? '儲存變更' : '儲存並發布路線'}
       </button>
 
-      {/* ── Sign Picker Modal ── */}
+      {/* Sign Picker */}
       <AnimatePresence>
         {showPicker && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -317,7 +329,7 @@ const LeaderCreatePage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* ── Config Modal (direction, paces, hidden content, map click) ── */}
+      {/* Config Modal */}
       <AnimatePresence>
         {configStep && (() => {
           const s = getSignById(configStep.signId);
@@ -336,7 +348,6 @@ const LeaderCreatePage: React.FC = () => {
                   <button onClick={() => { setConfigStep(null); setEditIdx(null); }} className="p-1 text-steel hover:text-ice"><X size={20} /></button>
                 </div>
 
-                {/* Sign preview */}
                 <div className="flex items-center gap-3 mb-4 p-3 bg-navy-800/60 rounded-xl">
                   <SignSVG signId={s.id} size={60} glow={true} direction={s.needsDirection ? configDirection : undefined} />
                   <div>
@@ -345,7 +356,6 @@ const LeaderCreatePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Direction picker (for signs that need it) */}
                 {s.needsDirection && (
                   <div className="mb-4">
                     <label className="block text-xs text-steel font-heading mb-2">箭頭指向哪個方向？</label>
@@ -358,15 +368,13 @@ const LeaderCreatePage: React.FC = () => {
                               ? 'bg-cyan/10 text-cyan border border-cyan/30'
                               : 'bg-navy-800 text-steel border border-cyan/5'
                           }`}>
-                          {opt.icon}
-                          {opt.label}
+                          {opt.icon}{opt.label}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Paces (for 信物在前) */}
                 {s.needsPaces && (
                   <div className="mb-4">
                     <label className="block text-xs text-steel font-heading mb-2">步數（方格內數字）</label>
@@ -381,10 +389,9 @@ const LeaderCreatePage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Hidden content */}
                 <div className="mb-4">
                   <label className="block text-xs text-steel font-heading mb-2">
-                    隱藏訊息／信物 <span className="text-[9px] text-steel">（隊員正確辨識後顯示）</span>
+                    隱藏訊息／信物 <span className="text-[9px] text-steel">（隊員答對後顯示）</span>
                   </label>
                   <input
                     value={configContent}
@@ -394,7 +401,6 @@ const LeaderCreatePage: React.FC = () => {
                   />
                 </div>
 
-                {/* Map position */}
                 <div className="mb-4">
                   <label className="block text-xs text-steel font-heading mb-2">地圖位置</label>
                   {configStep.lat != null ? (
@@ -404,7 +410,7 @@ const LeaderCreatePage: React.FC = () => {
                         className="ml-auto text-steel hover:text-red"><X size={14} /></button>
                     </div>
                   ) : (
-                    <p className="text-[10px] text-steel">關閉此視窗後點擊地圖放置，或直接確認跳過</p>
+                    <p className="text-[10px] text-steel">展開地圖後點擊放置，或直接確認跳過</p>
                   )}
                 </div>
 
