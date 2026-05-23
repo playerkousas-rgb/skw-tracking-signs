@@ -1,0 +1,295 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle, XCircle, ArrowRight, Trophy, Footprints, Map as MapIcon, Navigation } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import SignSVG from '../components/SignSVG';
+import Confetti from '../components/Confetti';
+import { getTrailById, saveResult, watchPosition, clearWatch } from '../lib/trailStore';
+import { getSignById, trackingSigns } from '../data/trackingSigns';
+
+// Default marker icon fix
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+const DefaultIcon = L.icon({ iconUrl, shadowUrl, iconSize: [25, 41], iconAnchor: [12, 41] });
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// --- Icons ---
+const makeStepMarker = (num: number, isCurrent: boolean): L.DivIcon => {
+  const size = isCurrent ? 40 : 28;
+  const el = document.createElement('div');
+  el.innerHTML = `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${isCurrent ? '#00d4ff' : '#082256'};border:2px solid ${isCurrent ? '#00d4ff' : '#3a5068'};box-shadow:${isCurrent ? '0 0 16px rgba(0,212,255,0.5)' : '0 0 4px rgba(0,212,255,0.15)'};font-family:Fredoka,sans-serif;font-size:${isCurrent ? '14' : '10'}px;font-weight:700;color:${isCurrent ? '#02133E' : '#7ba8cc'};">${num}</div>`;
+  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+};
+
+const meIcon: L.DivIcon = (() => {
+  const el = document.createElement('div');
+  el.innerHTML = '<div style="width:14px;height:14px;border-radius:50%;background:#00ff88;border:2.5px solid white;box-shadow:0 0 10px rgba(0,255,136,0.5);"></div>';
+  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [14, 14], iconAnchor: [7, 7] });
+})();
+
+// --- Recenter ---
+const RecenterMap: React.FC<{ lat: number; lng: number }> = ({ lat, lng }) => {
+  const map = useMap();
+  useEffect(() => { map.setView([lat, lng], map.getZoom()); }, [lat, lng, map]);
+  return null;
+};
+
+// --- BG ---
+const TrailBg: React.FC = () => (
+  <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.025]">
+    <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs><pattern id="td" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse"><circle cx="30" cy="30" r="1.5" fill="#00d4ff" /></pattern></defs>
+      <rect width="100%" height="100%" fill="url(#td)" />
+    </svg>
+  </div>
+);
+
+const TrailWalkPage: React.FC = () => {
+  const nav = useNavigate();
+  const { trailId } = useParams<{ trailId: string }>();
+  const [sp] = useSearchParams();
+  const playerName = sp.get('name') || '隊員';
+
+  const trail = trailId ? getTrailById(trailId) : undefined;
+
+  const [step, setStep] = useState(0);
+  const [showOptions, setShowOptions] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [answers, setAnswers] = useState<{ signId: number; correct: boolean }[]>([]);
+  const [done, setDone] = useState(false);
+  const [confetti, setConfetti] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [myLat, setMyLat] = useState<number | null>(null);
+  const [myLng, setMyLng] = useState<number | null>(null);
+  const watchRef = useRef(-1);
+
+  useEffect(() => {
+    watchRef.current = watchPosition(
+      (lat, lng) => { setMyLat(lat); setMyLng(lng); },
+      () => {}
+    );
+    return () => clearWatch(watchRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!trail) return;
+    setRevealed(false); setShowOptions(false); setSelected(null); setIsCorrect(null);
+    const t1 = setTimeout(() => setRevealed(true), 350);
+    const t2 = setTimeout(() => setShowOptions(true), 1000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [step, trail]);
+
+  const options = useMemo(() => {
+    if (!trail) return [];
+    const sign = getSignById(trail.steps[step]?.signId);
+    if (!sign) return [];
+    const correct = sign.action;
+    const wrongs = trackingSigns.filter(s => s.id !== sign.id).sort(() => Math.random() - 0.5).slice(0, 3).map(s => s.action);
+    return [...wrongs, correct].sort(() => Math.random() - 0.5).map(a => ({ text: a, isCorrect: a === correct }));
+  }, [trail, step]);
+
+  const handlePick = (action: string, correct: boolean) => {
+    if (selected !== null) return;
+    setSelected(action); setIsCorrect(correct);
+    setAnswers(prev => [...prev, { signId: trail!.steps[step].signId, correct }]);
+    try { navigator.vibrate?.(correct ? [50] : [150, 80, 150]); } catch {}
+  };
+
+  const handleNext = () => {
+    if (!trail) return;
+    const curOk = isCorrect === true;
+    if (step + 1 >= trail.steps.length) {
+      const c = answers.filter(a => a.correct).length + (curOk ? 1 : 0);
+      saveResult({ playerName, trailId: trail.id, answers, totalSteps: trail.steps.length, correctSteps: c, completedAt: Date.now() });
+      setDone(true);
+      if (c === trail.steps.length) { setConfetti(true); setTimeout(() => setConfetti(false), 4000); }
+    } else {
+      setStep(prev => prev + 1);
+    }
+  };
+
+  if (!trail) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#02133E' }}>
+      <div className="text-center p-6">
+        <Footprints size={48} className="text-steel mx-auto mb-4 opacity-40" />
+        <h1 className="text-xl font-heading font-bold text-ice mb-2">找不到路線</h1>
+        <p className="text-steel text-sm mb-4">路線可能已過期或代碼無效</p>
+        <button onClick={() => nav('/player')} className="px-6 py-3 bg-cyan/10 text-cyan border border-cyan/20 rounded-xl font-heading font-semibold">返回輸入代碼</button>
+      </div>
+    </div>
+  );
+
+  if (done) {
+    const c = answers.filter(a => a.correct).length;
+    const allOk = c === trail.steps.length;
+    const pct = Math.round((c / trail.steps.length) * 100);
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#02133E' }}>
+        {confetti && <Confetti pieces={50} />}
+        <div className="text-center p-6 w-full max-w-sm">
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12 }}>
+            {allOk ? <Trophy size={64} className="text-gold mx-auto mb-3" /> : <Footprints size={48} className="text-cyan mx-auto mb-3" />}
+          </motion.div>
+          <h1 className="text-2xl font-heading font-bold text-ice mb-1">{allOk ? '追蹤完成！' : '路線結束'}</h1>
+          <p className="text-steel text-sm mb-4">{playerName}，你已完成「{trail.name}」</p>
+          <div className="relative w-28 h-28 mx-auto mb-4">
+            <svg viewBox="0 0 120 120" className="w-28 h-28 -rotate-90">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#0d1f3c" strokeWidth="8" />
+              <motion.circle cx="60" cy="60" r="52" fill="none"
+                stroke={allOk ? '#00ff88' : pct >= 50 ? '#ffd700' : '#ff3366'} strokeWidth="8" strokeLinecap="round"
+                strokeDasharray={2 * Math.PI * 52}
+                initial={{ strokeDashoffset: 2 * Math.PI * 52 }}
+                animate={{ strokeDashoffset: 2 * Math.PI * 52 * (1 - pct / 100) }}
+                transition={{ duration: 1.2, delay: 0.3 }} />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className={`text-2xl font-heading font-bold ${allOk ? 'text-green' : pct >= 50 ? 'text-gold' : 'text-red'}`}>{c}/{trail.steps.length}</span>
+              <span className="text-[10px] text-steel">{pct}%</span>
+            </div>
+          </div>
+          <div className="space-y-2 w-full">
+            <button onClick={() => nav('/player')} className="w-full py-3 bg-cyan/10 text-cyan rounded-xl font-heading font-semibold border border-cyan/20 card-hover">追蹤其他路線</button>
+            <button onClick={() => nav('/')} className="w-full py-3 bg-navy-800 text-steel rounded-xl font-heading font-semibold border border-steel/10 card-hover">返回首頁</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const sign = getSignById(trail.steps[step]?.signId);
+  const prog = ((step + (selected !== null ? 1 : 0)) / trail.steps.length) * 100;
+  const stepCoords: [number, number][] = trail.steps
+    .filter(s => s.lat != null && s.lng != null)
+    .map(s => [s.lat!, s.lng!]);
+  const hasCoords = stepCoords.length > 0;
+
+  return (
+    <div className="min-h-screen relative flex flex-col" style={{ background: '#02133E' }}>
+      <TrailBg />
+      <div className="relative z-10 px-4 pt-4 pb-2 flex items-center gap-3">
+        <button onClick={() => { if (window.confirm('確定退出？進度不會保存。')) nav('/player'); }}
+          className="text-steel text-sm hover:text-ice">← 退出</button>
+        <div className="flex-1 h-1.5 bg-navy-800 rounded-full overflow-hidden">
+          <motion.div className="h-full bg-gradient-to-r from-cyan to-green rounded-full"
+            initial={{ width: 0 }} animate={{ width: `${prog}%` }} transition={{ duration: 0.5 }} />
+        </div>
+        <span className="text-xs text-steel font-mono">{step + 1}/{trail.steps.length}</span>
+        {hasCoords && (
+          <button onClick={() => setShowMap(!showMap)}
+            className={`px-2.5 py-1.5 rounded-full text-[10px] font-heading font-bold flex items-center gap-1 transition-all ${showMap ? 'bg-cyan text-navy-950' : 'bg-navy-800 text-steel border border-cyan/10'}`}>
+            <MapIcon size={12} />{showMap ? '隱藏' : '地圖'}
+          </button>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {showMap && hasCoords && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 180, opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            className="relative z-10 mx-4 mb-3 rounded-2xl overflow-hidden border border-cyan/10">
+            <MapContainer center={stepCoords[step] || stepCoords[0] || [22.3193, 114.1694]} zoom={15}
+              style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+              {myLat != null && myLng != null && <RecenterMap lat={myLat} lng={myLng} />}
+              {myLat != null && myLng != null && <Marker position={[myLat, myLng]} icon={meIcon} />}
+              {stepCoords.map((c, i) => (
+                <Marker key={i} position={c} icon={makeStepMarker(i + 1, i === step)} />
+              ))}
+              {stepCoords.length >= 2 && (
+                <Polyline positions={stepCoords} pathOptions={{ color: '#00d4ff', weight: 2, dashArray: '6 4', opacity: 0.5 }} />
+              )}
+            </MapContainer>
+            {myLat != null && (
+              <div className="absolute bottom-2 left-2 bg-navy-950/80 backdrop-blur rounded-full px-2 py-0.5 text-[9px] text-green flex items-center gap-1 z-[1000]">
+                <Navigation size={10} />GPS 定位中
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 pb-8">
+        <AnimatePresence mode="wait">
+          {!revealed ? (
+            <motion.div key="lk" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center">
+              <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 2 }}>
+                <Footprints size={40} className="text-cyan mx-auto mb-3" />
+              </motion.div>
+              <p className="text-steel text-sm animate-blink">觀察前方地面...</p>
+            </motion.div>
+          ) : (
+            <motion.div key={`s-${step}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+              className="w-full max-w-sm flex flex-col items-center">
+              <motion.div initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', damping: 15, stiffness: 200 }} className="mb-3 relative">
+                <div className="absolute inset-0 rounded-full bg-navy-900/80 blur-xl" />
+                <SignSVG signId={sign?.id ?? 1} size={160} className="relative z-10" />
+              </motion.div>
+              <div className={`px-3 py-1 rounded-full text-xs font-heading font-medium mb-3 ${sign?.isWarning ? 'bg-red/10 text-red border border-red/20' : 'bg-cyan/10 text-cyan border border-cyan/20'}`}>
+                第 {step + 1} 個符號{sign?.isWarning && ' · ⚠️'}
+              </div>
+              <h2 className="text-ice font-heading font-bold text-lg text-center mb-1">你發現了什麼？</h2>
+              <p className="text-steel text-sm text-center mb-5">觀察符號，選擇正確的應對行動</p>
+
+              {showOptions && (
+                <div className="w-full space-y-2.5">
+                  {options.map((opt, i) => {
+                    let cls = 'bg-navy-800/80 border-cyan/8 text-ice hover:border-cyan/30';
+                    if (selected !== null) {
+                      if (opt.isCorrect) cls = 'bg-green/10 border-green/40 text-green';
+                      else if (opt.text === selected && !opt.isCorrect) cls = 'bg-red/10 border-red/40 text-red opacity-60';
+                      else cls = 'bg-navy-800/30 border-steel/5 text-steel/30';
+                    }
+                    return (
+                      <motion.button key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.08 }} onClick={() => handlePick(opt.text, opt.isCorrect)} disabled={selected !== null}
+                        className={`w-full p-4 rounded-2xl border text-left transition-all font-heading font-semibold text-sm flex items-center gap-3 ${cls}`}>
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 ${selected !== null && opt.isCorrect ? 'bg-green/20 text-green' : selected === opt.text && !opt.isCorrect ? 'bg-red/20 text-red' : 'bg-cyan/10 text-cyan'}`}>{String.fromCharCode(65 + i)}</span>
+                        <span className="flex-1">{opt.text}</span>
+                        {selected !== null && opt.isCorrect && <CheckCircle size={18} className="text-green shrink-0" />}
+                        {selected === opt.text && !opt.isCorrect && <XCircle size={18} className="text-red shrink-0" />}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {isCorrect !== null && (
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="w-full mt-4">
+                  {isCorrect ? (
+                    <div className="p-4 bg-green/5 border border-green/20 rounded-2xl text-center">
+                      <CheckCircle size={28} className="text-green mx-auto mb-1.5" />
+                      <p className="text-green font-heading font-semibold text-sm">正確！</p>
+                      <p className="text-steel text-xs mt-0.5">{sign?.action}</p>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-red/5 border border-red/20 rounded-2xl text-center">
+                      <XCircle size={28} className="text-red mx-auto mb-1.5" />
+                      <p className="text-red font-heading font-semibold text-sm">不對哦</p>
+                      <p className="text-steel text-xs mt-0.5">正確行動：{sign?.action}</p>
+                    </div>
+                  )}
+                  <button onClick={handleNext}
+                    className="w-full mt-3 py-3.5 bg-cyan/10 text-cyan rounded-xl font-heading font-bold text-base border border-cyan/20 card-hover flex items-center justify-center gap-2">
+                    {step + 1 >= trail.steps.length ? <>查看成績 <Trophy size={18} /></> : <>繼續前進 <ArrowRight size={18} /></>}
+                  </button>
+                </motion.div>
+              )}
+
+              {selected === null && (
+                <div className="mt-4 text-center">
+                  <p className="text-[10px] text-steel">路線：{trail.name} · 追蹤者：{playerName}</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
+
+export default TrailWalkPage;

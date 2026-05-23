@@ -1,54 +1,82 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Crosshair, BookOpen, Compass, Zap } from 'lucide-react';
+import { BookOpen, PenTool, Compass, Footprints } from 'lucide-react';
 
-const H:React.FC=()=>{
-  const nav=useNavigate();
-  const c={hidden:{opacity:0},show:{opacity:1,transition:{staggerChildren:.1}}};
-  const i={hidden:{opacity:0,y:20},show:{opacity:1,y:0}};
+const HomePage: React.FC = () => {
+  const nav = useNavigate();
 
-  return(
-  <div className="min-h-[calc(100vh-5rem)] grid-bg relative">
-    <div className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-b from-navy-800 via-navy-900 to-navy-950"/>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px]">
-        <div className="absolute inset-0 rounded-full border border-cyan/5"/>
-        <div className="absolute inset-[15%] rounded-full border border-cyan/8"/>
-        <div className="absolute inset-[30%] rounded-full border border-cyan/10"/>
-        <div className="absolute inset-0 animate-radar"><div className="absolute top-1/2 left-1/2 w-1/2 h-[2px] bg-gradient-to-r from-cyan/40 to-transparent origin-left"/></div>
-      </div>
-      <div className="relative px-6 pt-14 pb-12 text-center z-10">
-        <motion.div initial={{scale:.7,opacity:0}}animate={{scale:1,opacity:1}}transition={{duration:.5,type:'spring'}}>
-          <div className="w-20 h-20 mx-auto bg-navy-800 rounded-2xl flex items-center justify-center border border-cyan/20 box-glow-cyan mb-5"><Crosshair size={36} className="text-cyan"/></div>
-        </motion.div>
-        <motion.h1 initial={{opacity:0,y:20}}animate={{opacity:1,y:0}}transition={{delay:.2}} className="font-heading text-5xl font-bold text-ice glow-cyan mb-1">追蹤符號</motion.h1>
-        <motion.div initial={{opacity:0}}animate={{opacity:1}}transition={{delay:.35}} className="font-mono text-[10px] text-cyan/50 tracking-[.4em] mb-3">TRACKING SIGNS</motion.div>
-        <motion.p initial={{opacity:0}}animate={{opacity:1}}transition={{delay:.5}} className="text-steel-light text-sm max-w-xs mx-auto">童軍實地追蹤行動 · GPS定位 · 隱形符號探索</motion.p>
-      </div>
-    </div>
-    <motion.div variants={c} initial="hidden" animate="show" className="px-5 space-y-3 pt-1 pb-4 z-10 relative">
-      {[{to:'/learn',icon:BookOpen,cl:'bg-navy-800/80 border-cyan/10',ic:'bg-cyan-dark text-cyan',t:'符號圖鑑',d:'10種官方追蹤符號 · 發光圖示',gl:''},
-        {to:'/leader',icon:Crosshair,cl:'bg-gradient-to-r from-cyan-dark to-navy-700 border-cyan/20 box-glow-cyan',ic:'bg-cyan/10 text-cyan',t:'領袖指揮台',d:'GPS埋設 · 頻道分享',gl:'glow-cyan'},
-        {to:'/player',icon:Compass,cl:'bg-gradient-to-r from-green-dark to-navy-700 border-green/20 box-glow-green',ic:'bg-green/10 text-green',t:'成員行動',d:'頻道登入 · 雷達追蹤 · 震動提示',gl:'glow-green'},
-        {to:'/quiz',icon:Zap,cl:'bg-navy-800/80 border-gold/10',ic:'bg-gold/10 text-gold',t:'快速測驗',d:'隨機出題 · 即時驗證',gl:''}
-      ].map((x, idx)=>(
-        <motion.div key={idx} variants={i}>
-          <button onClick={()=>nav(x.to)} className={`w-full card-hover ${x.cl} rounded-2xl p-4 flex items-center gap-4 text-left border`}>
-            <div className={`w-12 h-12 rounded-xl ${x.ic} flex items-center justify-center flex-shrink-0`}><x.icon size={24}/></div>
-            <div className="flex-1"><div className={`font-heading font-bold text-ice text-base ${x.gl}`}>{x.t}</div><div className="text-ice-dim text-xs">{x.d}</div></div>
-            <span className="text-cyan/20 text-lg">›</span>
-          </button>
-        </motion.div>
-      ))}
+  const containers = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.15 } },
+  };
+
+  const itemV = {
+    hidden: { opacity: 0, y: 24 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+  };
+
+  const colorMap: Record<string, { text: string; bg: string; glow: string; box: string }> = {
+    cyan: { text: 'text-cyan', bg: 'bg-cyan/10', glow: 'glow-cyan', box: 'box-glow-cyan' },
+    green: { text: 'text-green', bg: 'bg-green/10', glow: 'glow-green', box: 'box-glow-green' },
+    gold: { text: 'text-gold', bg: 'bg-gold/10', glow: 'glow-gold', box: 'box-glow-gold' },
+  };
+
+  const cards = [
+    { to: '/learn', icon: BookOpen, color: 'cyan' as const, g: 'from-cyan-dark/60 to-navy-800/80', b: 'border-cyan/15', t: '符號圖鑑', d: '認識10種追蹤符號，學習每種符號的意義與應對動作', s: '10', sl: '符號' },
+    { to: '/leader', icon: PenTool, color: 'green' as const, g: 'from-green-dark/60 to-navy-800/80', b: 'border-green/15', t: '設計路線', d: '領袖建立追蹤路線，在地圖上標記每個符號位置', s: '建立', sl: '路線' },
+    { to: '/player', icon: Compass, color: 'gold' as const, g: 'from-navy-700/60 to-navy-800/80', b: 'border-gold/15', t: '沿途追蹤', d: '輸入路線代碼，沿路觀察符號並做出正確判斷', s: '追蹤', sl: '開始' },
+  ];
+
+  return (
+    <motion.div variants={containers} initial="hidden" animate="show" className="space-y-4">
+      {/* Hero */}
+      <motion.div variants={itemV} className="text-center pt-4 pb-2">
+        <div className="inline-flex items-center gap-2 mb-2">
+          <Footprints size={32} className="text-cyan" />
+          <h1 className="text-3xl font-heading font-bold text-ice tracking-wide">SKW 追蹤符號</h1>
+        </div>
+        <p className="text-steel-light text-sm leading-relaxed max-w-xs mx-auto">
+          童軍追蹤訓練工具 — 觀察符號，跟隨指示，沿路追尋
+        </p>
+      </motion.div>
+
+      {/* Stats bar */}
+      <motion.div variants={itemV} className="flex items-center justify-center gap-6 py-3 px-6 bg-navy-800/50 rounded-2xl border border-cyan/5">
+        {[{ value: '10', label: '官方符號' }, { value: '4', label: '符號類別' }, { value: '沿路', label: '追蹤模式' }].map((s, i) => (
+          <div key={i} className="text-center">
+            <div className="text-lg font-heading font-bold text-ice">{s.value}</div>
+            <div className="text-[10px] text-steel">{s.label}</div>
+          </div>
+        ))}
+      </motion.div>
+
+      {/* Cards */}
+      <motion.div variants={itemV} className="space-y-3">
+        {cards.map(c => {
+          const cl = colorMap[c.color];
+          return (
+            <button key={c.to} onClick={() => nav(c.to)}
+              className={`w-full bg-gradient-to-r ${c.g} ${c.b} border rounded-2xl p-4 flex items-center gap-4 text-left card-hover ${cl.box}`}>
+              <div className={`w-12 h-12 rounded-xl ${cl.bg} flex items-center justify-center shrink-0`}><c.icon size={22} className={cl.text} /></div>
+              <div className="flex-1 min-w-0">
+                <h3 className={`font-heading font-semibold text-base ${cl.text} ${cl.glow}`}>{c.t}</h3>
+                <p className="text-steel text-xs mt-0.5 leading-relaxed">{c.d}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <div className={`text-xl font-heading font-bold ${cl.text}`}>{c.s}</div>
+                <div className="text-[10px] text-steel">{c.sl}</div>
+              </div>
+            </button>
+          );
+        })}
+      </motion.div>
+
+      <motion.p variants={itemV} className="text-center text-[10px] text-steel pt-2 pb-4">
+        © 2026 SKW SCOUT · 童軍追蹤符號訓練工具
+      </motion.p>
     </motion.div>
-    <div className="px-5 pb-6 z-10 relative">
-      <div className="bg-navy-800/50 rounded-xl border border-cyan/5 p-3 flex items-center justify-around text-center">
-        <div><div className="font-heading font-bold text-lg text-cyan">10</div><div className="text-steel text-[9px]">符號</div></div>
-        <div className="w-px h-5 bg-cyan/10"/><div><div className="font-heading font-bold text-lg text-green">GPS</div><div className="text-steel text-[9px]">定位</div></div>
-        <div className="w-px h-5 bg-cyan/10"/><div><div className="font-heading font-bold text-lg text-gold">3m</div><div className="text-steel text-[9px]">觸發</div></div>
-      </div>
-    </div>
-  </div>);
+  );
 };
-export default H;
+
+export default HomePage;

@@ -1,24 +1,25 @@
-import{BrowserRouter,Routes,Route}from'react-router-dom';
-import Layout from'./components/Layout';
-import HomePage from'./pages/HomePage';
-import LearnPage from'./pages/LearnPage';
-import LeaderPage from'./pages/LeaderPage';
-import LeaderCreatePage from'./pages/LeaderCreatePage';
-import PlayerPage from'./pages/PlayerPage';
-import PlayPage from'./pages/PlayPage';
-import QuizPage from'./pages/QuizPage';
-import ResultPage from'./pages/ResultPage';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Layout from './components/Layout';
+import HomePage from './pages/HomePage';
+import LearnPage from './pages/LearnPage';
+import LeaderPage from './pages/LeaderPage';
+import LeaderCreatePage from './pages/LeaderCreatePage';
+import PlayerPage from './pages/PlayerPage';
+import TrailWalkPage from './pages/TrailWalkPage';
 
-function App(){
-  return(<BrowserRouter><Layout><Routes>
-    <Route path="/" element={<HomePage/>}/>
-    <Route path="/learn" element={<LearnPage/>}/>
-    <Route path="/leader" element={<LeaderPage/>}/>
-    <Route path="/leader/create" element={<LeaderCreatePage/>}/>
-    <Route path="/player" element={<PlayerPage/>}/>
-    <Route path="/play/:gameId" element={<PlayPage/>}/>
-    <Route path="/quiz" element={<QuizPage/>}/>
-    <Route path="/result" element={<ResultPage/>}/>
-  </Routes></Layout></BrowserRouter>);
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout><HomePage /></Layout>} />
+        <Route path="/learn" element={<Layout><LearnPage /></Layout>} />
+        <Route path="/leader" element={<Layout><LeaderPage /></Layout>} />
+        <Route path="/leader/create" element={<Layout><LeaderCreatePage /></Layout>} />
+        <Route path="/player" element={<Layout><PlayerPage /></Layout>} />
+        <Route path="/play/:trailId" element={<TrailWalkPage />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
+
 export default App;

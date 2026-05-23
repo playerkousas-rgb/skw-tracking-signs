@@ -1,79 +1,267 @@
 import React from 'react';
 
-interface P { signId:number; size?:number; className?:string; glow?:boolean; }
-const C='#00d4ff',G='#00ff88',R='#ff3366',Y='#ffd700',SW=6;
+interface SignSVGProps {
+  signId: number;
+  size?: number;
+  className?: string;
+  glow?: boolean;
+}
 
-export const SignSVG:React.FC<P>=({signId,size=120,className='',glow=true})=>{
-  const f=glow?`drop-shadow(0 0 8px ${C}) drop-shadow(0 0 18px rgba(0,212,255,0.25))`:undefined;
-  const fr=glow?`drop-shadow(0 0 8px ${R}) drop-shadow(0 0 18px rgba(255,51,102,0.25))`:undefined;
-  const fg=glow?`drop-shadow(0 0 8px ${G}) drop-shadow(0 0 18px rgba(0,255,136,0.25))`:undefined;
-  const fy=glow?`drop-shadow(0 0 8px ${Y}) drop-shadow(0 0 18px rgba(255,215,0,0.25))`:undefined;
+const WOOD = '#8B6914';
+const WOOD_DARK = '#6B4F12';
+const STONE = '#9E9E9E';
+const STONE_DARK = '#757575';
+const GROUND = '#3D2B1F';
+const GROUND_LIGHT = '#5C4033';
+const MOSS = '#4A7C3F';
 
-  const s:Record<number,React.ReactNode>={
-    1:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:f}}>
-      <line x1="15" y1="60" x2="78" y2="60" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="62" y1="38" x2="85" y2="60" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="62" y1="82" x2="85" y2="60" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <circle cx="28" cy="48" r="4" fill={G} opacity=".6"/><circle cx="42" cy="74" r="3" fill={G} opacity=".4"/>
-    </svg>,
-    2:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:f}}>
-      <line x1="60" y1="22" x2="60" y2="98" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="46" y1="38" x2="60" y2="22" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="74" y1="38" x2="60" y2="22" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-    </svg>,
-    3:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:fr}}>
-      <line x1="32" y1="32" x2="88" y2="88" stroke={R} strokeWidth={SW+1} strokeLinecap="round"/>
-      <line x1="88" y1="32" x2="32" y2="88" stroke={R} strokeWidth={SW+1} strokeLinecap="round"/>
-    </svg>,
-    4:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:fg}}>
-      <circle cx="60" cy="32" r="7" fill="none" stroke={G} strokeWidth="2.5" opacity=".7"/>
-      <circle cx="88" cy="48" r="7" fill="none" stroke={G} strokeWidth="2.5" opacity=".6"/>
-      <circle cx="88" cy="78" r="7" fill="none" stroke={G} strokeWidth="2.5" opacity=".7"/>
-      <circle cx="60" cy="94" r="7" fill="none" stroke={G} strokeWidth="2.5" opacity=".6"/>
-      <circle cx="32" cy="78" r="7" fill="none" stroke={G} strokeWidth="2.5" opacity=".7"/>
-      <circle cx="32" cy="48" r="7" fill="none" stroke={G} strokeWidth="2.5" opacity=".6"/>
-      <circle cx="60" cy="63" r="9" fill={G} opacity=".9"/>
-    </svg>,
-    5:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:f}}>
-      <path d="M20 42Q40 28,60 42Q80 56,100 42" stroke={C} strokeWidth={SW} fill="none" strokeLinecap="round"/>
-      <path d="M20 64Q40 50,60 64Q80 78,100 64" stroke={C} strokeWidth={SW} fill="none" strokeLinecap="round"/>
-      <path d="M20 86Q40 72,60 86Q80 100,100 86" stroke={C} strokeWidth={SW} fill="none" strokeLinecap="round"/>
-    </svg>,
-    6:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:f}}>
-      <line x1="72" y1="88" x2="72" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="72" y1="52" x2="32" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="48" y1="36" x2="32" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="48" y1="68" x2="32" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-    </svg>,
-    7:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:f}}>
-      <line x1="48" y1="88" x2="48" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="48" y1="52" x2="88" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="72" y1="36" x2="88" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="72" y1="68" x2="88" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-    </svg>,
-    8:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:fr}}>
-      <line x1="38" y1="28" x2="38" y2="92" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="82" y1="28" x2="82" y2="92" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="28" y1="60" x2="92" y2="60" stroke={R} strokeWidth={SW+1} strokeLinecap="round"/>
-    </svg>,
-    9:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:fy}}>
-      <line x1="28" y1="32" x2="72" y2="32" stroke={Y} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="72" y1="32" x2="72" y2="76" stroke={Y} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="72" y1="76" x2="28" y2="76" stroke={Y} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="28" y1="76" x2="28" y2="32" stroke={Y} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="72" y1="54" x2="98" y2="54" stroke={Y} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="84" y1="42" x2="98" y2="54" stroke={Y} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="84" y1="66" x2="98" y2="54" stroke={Y} strokeWidth={SW} strokeLinecap="round"/>
-      <text x="50" y="60" textAnchor="middle" dominantBaseline="central" fill={Y} fontSize="22" fontWeight="bold" fontFamily="Fredoka">6</text>
-    </svg>,
-    10:<svg width={size} height={size} viewBox="0 0 120 120" className={className} style={{filter:f}}>
-      <line x1="60" y1="92" x2="60" y2="52" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="60" y1="52" x2="28" y2="26" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <line x1="60" y1="52" x2="92" y2="26" stroke={C} strokeWidth={SW} strokeLinecap="round"/>
-      <circle cx="22" cy="38" r="3" fill={G} opacity=".6"/><circle cx="22" cy="50" r="3" fill={G} opacity=".4"/>
-      <circle cx="98" cy="38" r="3" fill={G} opacity=".6"/><circle cx="98" cy="50" r="3" fill={G} opacity=".4"/>
-    </svg>,
+const SignSVG: React.FC<SignSVGProps> = ({ signId, size = 140, className = '', glow = true }) => {
+  const s = size;
+  const pad = s * 0.15;
+  const inner = s - pad * 2;
+  const sw = inner * 0.12; // stick width
+  const r = sw / 2;
+
+  const filterId = `glow-${signId}`;
+
+  const renderStick = (x1: number, y1: number, x2: number, y2: number, key: string) => (
+    <g key={key}>
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={WOOD_DARK} strokeWidth={sw + 2} strokeLinecap="round" />
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={WOOD} strokeWidth={sw} strokeLinecap="round" />
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#A0782C" strokeWidth={sw * 0.3} strokeLinecap="round" opacity={0.5} />
+    </g>
+  );
+
+  const renderStone = (cx: number, cy: number, rs: number, key: string) => (
+    <g key={key}>
+      <ellipse cx={cx} cy={cy} rx={rs} ry={rs * 0.75} fill={STONE_DARK} />
+      <ellipse cx={cx - rs * 0.15} cy={cy - rs * 0.1} rx={rs * 0.8} ry={rs * 0.6} fill={STONE} />
+      <ellipse cx={cx - rs * 0.2} cy={cy - rs * 0.2} rx={rs * 0.3} ry={rs * 0.2} fill="#BDBDBD" opacity={0.4} />
+    </g>
+  );
+
+  const renderGroundPatch = () => (
+    <rect x={pad - 2} y={pad - 2} width={inner + 4} height={inner + 4} rx={inner * 0.15} fill={GROUND} opacity={0.5} />
+  );
+
+  const renderSVG = (): React.ReactNode => {
+    switch (signId) {
+      // 1 - This Way (arrow made of sticks)
+      case 1: {
+        const cx = s / 2;
+        const cy = s / 2;
+        const shaftLen = inner * 0.55;
+        const headLen = inner * 0.3;
+        const startX = cx - shaftLen / 2;
+        const endX = cx + shaftLen / 2;
+        return (
+          <>
+            {renderGroundPatch()}
+            {renderStick(startX, cy, endX, cy, 'shaft')}
+            {renderStick(endX, cy, endX - headLen, cy - headLen * 0.6, 'head1')}
+            {renderStick(endX, cy, endX - headLen, cy + headLen * 0.6, 'head2')}
+          </>
+        );
+      }
+      // 2 - Straight On (two parallel sticks)
+      case 2: {
+        const gap = inner * 0.25;
+        const len = inner * 0.65;
+        const startX = s / 2 - len / 2;
+        const endX = s / 2 + len / 2;
+        return (
+          <>
+            {renderGroundPatch()}
+            {renderStick(startX, s / 2 - gap / 2, endX, s / 2 - gap / 2, 'top')}
+            {renderStick(startX, s / 2 + gap / 2, endX, s / 2 + gap / 2, 'bot')}
+          </>
+        );
+      }
+      // 3 - Wrong Way / Danger (X made of two sticks)
+      case 3: {
+        const diag = inner * 0.55;
+        const cx = s / 2;
+        const cy = s / 2;
+        return (
+          <>
+            {renderGroundPatch()}
+            {renderStick(cx - diag, cy - diag, cx + diag, cy + diag, 'x1')}
+            {renderStick(cx + diag, cy - diag, cx - diag, cy + diag, 'x2')}
+          </>
+        );
+      }
+      // 4 - Gone Home (circle of stones with center stone)
+      case 4: {
+        const cx = s / 2;
+        const cy = s / 2;
+        const radius = inner * 0.35;
+        const stoneCount = 8;
+        const stones = [];
+        for (let i = 0; i < stoneCount; i++) {
+          const angle = (i / stoneCount) * Math.PI * 2 - Math.PI / 2;
+          const sx = cx + Math.cos(angle) * radius;
+          const sy = cy + Math.sin(angle) * radius;
+          stones.push(renderStone(sx, sy, inner * 0.08, `s${i}`));
+        }
+        return (
+          <>
+            {renderGroundPatch()}
+            {stones}
+            {renderStone(cx, cy, inner * 0.1, 'center')}
+          </>
+        );
+      }
+      // 5 - Water Ahead (wavy lines made of sticks)
+      case 5: {
+        const cx = s / 2;
+        const cy = s / 2;
+        const w = inner * 0.6;
+        const h = inner * 0.35;
+        const sX = cx - w / 2;
+        const pts = 12;
+        const parts = [];
+        for (let i = 0; i < pts - 1; i++) {
+          const t1 = i / (pts - 1);
+          const t2 = (i + 1) / (pts - 1);
+          const x1 = sX + t1 * w;
+          const x2 = sX + t2 * w;
+          const y1 = cy + Math.sin(t1 * Math.PI * 3) * h;
+          const y2 = cy + Math.sin(t2 * Math.PI * 3) * h;
+          parts.push(renderStick(x1, y1, x2, y2, `w${i}`));
+        }
+        return <>{renderGroundPatch()}{parts}</>;
+      }
+      // 6 - Turn Left (arrow curving left)
+      case 6: {
+        const cx = s / 2;
+        const cy = s / 2;
+        const shaftX = cx + inner * 0.1;
+        const shaftY1 = cy + inner * 0.35;
+        const shaftY2 = cy - inner * 0.15;
+        const curveX = cx - inner * 0.2;
+        const curveY = cy - inner * 0.2;
+        return (
+          <>
+            {renderGroundPatch()}
+            {renderStick(shaftX, shaftY1, shaftX, shaftY2, 'shaft')}
+            {renderStick(shaftX, shaftY2, curveX, curveY, 'curve')}
+            {renderStick(curveX, curveY, curveX - inner * 0.15, curveY - inner * 0.12, 'head1')}
+            {renderStick(curveX, curveY, curveX + inner * 0.05, curveY - inner * 0.18, 'head2')}
+          </>
+        );
+      }
+      // 7 - Turn Right (arrow curving right)
+      case 7: {
+        const cx = s / 2;
+        const cy = s / 2;
+        const shaftX = cx - inner * 0.1;
+        const shaftY1 = cy + inner * 0.35;
+        const shaftY2 = cy - inner * 0.15;
+        const curveX = cx + inner * 0.2;
+        const curveY = cy - inner * 0.2;
+        return (
+          <>
+            {renderGroundPatch()}
+            {renderStick(shaftX, shaftY1, shaftX, shaftY2, 'shaft')}
+            {renderStick(shaftX, shaftY2, curveX, curveY, 'curve')}
+            {renderStick(curveX, curveY, curveX + inner * 0.15, curveY - inner * 0.12, 'head1')}
+            {renderStick(curveX, curveY, curveX - inner * 0.05, curveY - inner * 0.18, 'head2')}
+          </>
+        );
+      }
+      // 8 - Obstacle Ahead (parallel lines with cross bar)
+      case 8: {
+        const gap = inner * 0.3;
+        const len = inner * 0.55;
+        const sX = s / 2 - len / 2;
+        const eX = s / 2 + len / 2;
+        const barX = s / 2;
+        const barY1 = s / 2 - gap / 2;
+        const barY2 = s / 2 + gap / 2;
+        return (
+          <>
+            {renderGroundPatch()}
+            {renderStick(sX, s / 2 - gap / 2, eX, s / 2 - gap / 2, 'top')}
+            {renderStick(sX, s / 2 + gap / 2, eX, s / 2 + gap / 2, 'bot')}
+            {renderStick(barX, barY1, barX, barY2, 'cross')}
+          </>
+        );
+      }
+      // 9 - Paces to Message (box with arrow + number)
+      case 9: {
+        const cx = s / 2;
+        const cy = s / 2;
+        const boxSize = inner * 0.3;
+        const bx = cx - inner * 0.25;
+        const by = cy - boxSize / 2;
+        return (
+          <>
+            {renderGroundPatch()}
+            {renderStick(bx, by, bx + boxSize, by, 'bt')}
+            {renderStick(bx, by + boxSize, bx + boxSize, by + boxSize, 'bb')}
+            {renderStick(bx, by, bx, by + boxSize, 'bl')}
+            {renderStick(bx + boxSize, by, bx + boxSize, by + boxSize, 'br')}
+            {renderStick(bx + boxSize, cy, bx + boxSize + inner * 0.25, cy, 'arrS')}
+            {renderStick(bx + boxSize + inner * 0.25, cy, bx + boxSize + inner * 0.12, cy - inner * 0.1, 'arr1')}
+            {renderStick(bx + boxSize + inner * 0.25, cy, bx + boxSize + inner * 0.12, cy + inner * 0.1, 'arr2')}
+          </>
+        );
+      }
+      // 10 - Split Path (arrow that forks)
+      case 10: {
+        const cx = s / 2;
+        const cy = s / 2;
+        const shaftY = cy + inner * 0.3;
+        const splitY = cy - inner * 0.05;
+        const forkLen = inner * 0.3;
+        return (
+          <>
+            {renderGroundPatch()}
+            {renderStick(cx, shaftY, cx, splitY, 'shaft')}
+            {renderStick(cx, splitY, cx - forkLen, cy - forkLen, 'forkL')}
+            {renderStick(cx, splitY, cx + forkLen, cy - forkLen, 'forkR')}
+            {renderStick(cx - forkLen, cy - forkLen, cx - forkLen - inner * 0.1, cy - forkLen - inner * 0.1, 'hl1')}
+            {renderStick(cx - forkLen, cy - forkLen, cx - forkLen + inner * 0.05, cy - forkLen - inner * 0.15, 'hl2')}
+            {renderStick(cx + forkLen, cy - forkLen, cx + forkLen + inner * 0.1, cy - forkLen - inner * 0.1, 'hr1')}
+            {renderStick(cx + forkLen, cy - forkLen, cx + forkLen - inner * 0.05, cy - forkLen - inner * 0.15, 'hr2')}
+          </>
+        );
+      }
+      default:
+        return (
+          <text x={s / 2} y={s / 2} textAnchor="middle" dominantBaseline="central" fill="#5a7a98" fontSize={inner * 0.3}>
+            ?
+          </text>
+        );
+    }
   };
-  return <div className="flex items-center justify-center">{s[signId]||<div className="text-ice-dim">?</div>}</div>;
+
+  const glowFilter = glow ? (
+    <defs>
+      <filter id={filterId} x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="3" result="blur" />
+        <feFlood floodColor="#00d4ff" floodOpacity="0.25" result="color" />
+        <feComposite in="color" in2="blur" operator="in" result="shadow" />
+        <feMerge>
+          <feMergeNode in="shadow" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+  ) : null;
+
+  return (
+    <svg
+      width={s}
+      height={s}
+      viewBox={`0 0 ${s} ${s}`}
+      className={className}
+      style={{ filter: glow ? `url(#${filterId})` : undefined }}
+    >
+      {glowFilter}
+      {renderSVG()}
+    </svg>
+  );
 };
+
 export default SignSVG;
