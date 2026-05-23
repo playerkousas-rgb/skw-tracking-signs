@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Compass, ClipboardPaste, LogIn, History, ArrowRight } from 'lucide-react';
+import { Compass, ClipboardPaste, LogIn, History, Gift } from 'lucide-react';
 import { getTrailById, decodeTrail, saveTrail, getAllResults } from '../lib/trailStore';
 
 const PlayerPage: React.FC = () => {
@@ -12,133 +12,76 @@ const PlayerPage: React.FC = () => {
 
   const handleJoin = () => {
     setError('');
-
-    if (!playerName.trim()) {
-      setError('請輸入你的代號（隊員名稱）');
-      return;
-    }
-    if (!code.trim()) {
-      setError('請輸入路線代碼');
-      return;
-    }
+    if (!playerName.trim()) { setError('請輸入你的代號（隊員名稱）'); return; }
+    if (!code.trim()) { setError('請輸入路線代碼'); return; }
 
     const input = code.trim();
 
-    // Try as encoded trail first (long base64)
+    // Encoded trail
     if (input.length > 40 || input.includes('eyJ')) {
       const decoded = decodeTrail(input);
-      if (decoded) {
-        saveTrail(decoded);
-        nav(`/play/${decoded.id}?name=${encodeURIComponent(playerName.trim())}`);
-        return;
-      }
+      if (decoded) { saveTrail(decoded); nav(`/play/${decoded.id}?name=${encodeURIComponent(playerName.trim())}`); return; }
       setError('路線代碼格式無效，請檢查是否完整複製');
       return;
     }
 
-    // Try as trail ID
+    // Trail ID
     const trail = getTrailById(input);
-    if (!trail) {
-      setError('找不到此路線 — 請確認代碼或 ID 是否正確');
-      return;
-    }
-
+    if (!trail) { setError('找不到此路線 — 請確認代碼或ID是否正確'); return; }
     nav(`/play/${trail.id}?name=${encodeURIComponent(playerName.trim())}`);
   };
 
   const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      setCode(text.trim());
-      setError('');
-    } catch {
-      setError('無法讀取剪貼簿，請手動貼上');
-    }
+    try { const text = await navigator.clipboard.readText(); setCode(text.trim()); setError(''); }
+    catch { setError('無法讀取剪貼簿，請手動貼上'); }
   };
 
   const recentResults = getAllResults().slice(-3).reverse();
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="text-center pt-2 pb-1">
         <Compass size={36} className="text-cyan mx-auto mb-2" />
         <h1 className="text-xl font-heading font-bold text-ice glow-cyan">沿途追蹤</h1>
-        <p className="text-xs text-steel mt-1">輸入路線代碼，沿路觀察符號前進</p>
+        <p className="text-xs text-steel mt-1">輸入路線代碼，觀察符號箭頭，尋找隱藏信物</p>
       </div>
 
-      {/* Name Input */}
       <div>
         <label className="block text-xs text-steel mb-1.5 font-heading">你的代號</label>
-        <input
-          value={playerName}
-          onChange={e => setPlayerName(e.target.value)}
-          placeholder="例如：小狼A、隊長"
-          className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 transition-colors text-sm"
-        />
+        <input value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="例如：小狼A、隊長"
+          className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 transition-colors text-sm" />
       </div>
 
-      {/* Code Input */}
       <div>
         <label className="block text-xs text-steel mb-1.5 font-heading">路線代碼</label>
         <div className="flex gap-2">
-          <input
-            value={code}
-            onChange={e => setCode(e.target.value)}
-            placeholder="貼上路線代碼或輸入路線 ID"
-            className="flex-1 px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 transition-colors text-sm font-mono"
-          />
-          <button
-            onClick={handlePaste}
-            className="px-3 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-steel hover:text-cyan transition-colors"
-            title="貼上"
-          >
-            <ClipboardPaste size={18} />
-          </button>
+          <input value={code} onChange={e => setCode(e.target.value)} placeholder="貼上路線代碼或輸入路線ID"
+            className="flex-1 px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 transition-colors text-sm font-mono" />
+          <button onClick={handlePaste} className="px-3 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-steel hover:text-cyan transition-colors"><ClipboardPaste size={18} /></button>
         </div>
       </div>
 
-      {/* Error */}
       {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-3 bg-red/5 border border-red/10 rounded-xl text-red text-xs text-center"
-        >
-          {error}
-        </motion.div>
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="p-3 bg-red/5 border border-red/10 rounded-xl text-red text-xs text-center">{error}</motion.div>
       )}
 
-      {/* Join Button */}
-      <button
-        onClick={handleJoin}
-        className="w-full py-4 bg-gradient-to-r from-green/20 to-cyan/10 text-cyan rounded-2xl font-heading font-bold text-lg border border-cyan/20 box-glow-cyan card-hover flex items-center justify-center gap-2"
-      >
-        <LogIn size={20} />
-        開始追蹤
+      <button onClick={handleJoin}
+        className="w-full py-4 bg-gradient-to-r from-green/20 to-cyan/10 text-cyan rounded-2xl font-heading font-bold text-lg border border-cyan/20 box-glow-cyan card-hover flex items-center justify-center gap-2">
+        <LogIn size={20} />開始追蹤
       </button>
 
-      {/* Recent Results */}
       {recentResults.length > 0 && (
         <div>
-          <h3 className="text-xs text-steel font-heading mb-2 flex items-center gap-1.5">
-            <History size={12} />
-            最近追蹤記錄
-          </h3>
+          <h3 className="text-xs text-steel font-heading mb-2 flex items-center gap-1.5"><History size={12} />最近追蹤記錄</h3>
           <div className="space-y-1">
             {recentResults.map((r, i) => (
-              <div
-                key={i}
-                className="bg-navy-800/40 rounded-lg px-3 py-2 flex items-center justify-between"
-              >
+              <div key={i} className="bg-navy-800/40 rounded-lg px-3 py-2 flex items-center justify-between">
                 <div className="min-w-0">
                   <span className="text-xs text-ice font-heading">{r.playerName}</span>
                   <span className="text-[10px] text-steel ml-2">{r.trailId}</span>
                 </div>
-                <span className={`text-xs font-heading font-bold ${
-                  r.correctSteps === r.totalSteps ? 'text-green' :
-                  r.correctSteps >= r.totalSteps / 2 ? 'text-gold' : 'text-red'
-                }`}>
+                <span className={`text-xs font-heading font-bold ${r.correctSteps === r.totalSteps ? 'text-green' : r.correctSteps >= r.totalSteps / 2 ? 'text-gold' : 'text-red'}`}>
                   {r.correctSteps}/{r.totalSteps}
                 </span>
               </div>
@@ -147,12 +90,9 @@ const PlayerPage: React.FC = () => {
         </div>
       )}
 
-      {/* Tips */}
       <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
         <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">玩法：</strong>
-          領袖會給你路線代碼，輸入後沿路看到符號→判斷應做什麼→答對繼續前進。
-          路線終點是「已回家」符號。
+          💡 <strong className="text-steel-light">玩法：</strong>領袖給你路線代碼，沿途觀察符號+箭頭方向→判斷應做什麼→答對後<Gift size={10} className="inline text-gold" />揭露隱藏信物→繼續前進直到「已回家」。
         </p>
       </div>
     </div>
