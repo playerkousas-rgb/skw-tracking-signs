@@ -54,8 +54,8 @@ const HomePage: React.FC = () => {
       {/* 追蹤 ≠ 看地圖 */}
       <motion.div variants={itemV} className="p-3 bg-gold/5 rounded-2xl border border-gold/15">
         <p className="text-[11px] text-gold leading-relaxed text-center font-heading font-semibold">
-          🐾 這是追蹤符號訓練，不是看地圖尋寶 —
-          <span className="text-steel-light font-normal"> 全程以地面符號指引你前進，配合 ⏱計時 或 ⏳倒計時 完成任務</span>
+          🐾 追蹤 ≠ 尋寶 —
+          <span className="text-steel-light font-normal"> 地圖只讓你知道自己在哪、防止迷路；下一個符號在哪要靠你沿途觀察地面找出來，配合 ⏱計時／⏳倒計時完成任務</span>
         </p>
       </motion.div>
 

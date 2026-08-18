@@ -415,8 +415,8 @@ const LeaderCreatePage: React.FC = () => {
 
       <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
         <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">提示：</strong>這是追蹤，不是尋寶。隊員全程不看地圖 —
-          靠地面符號指引前進；GPS 錨點只令追蹤儀在行近時通知，配合「符號判斷題」確保隊員真正讀懂符號。
+          💡 <strong className="text-steel-light">提示：</strong>這是追蹤，不是尋寶。地圖的作用是讓隊員知道自己在哪（防迷路）—
+          符號位置不會預先顯示，行到觸發後才標示；配合「符號判斷題」確保隊員真正讀懂符號。
         </p>
       </div>
 
@@ -555,7 +555,8 @@ const LeaderCreatePage: React.FC = () => {
                     </button>
                   )}
                   <p className="text-[9px] text-steel mt-1.5 leading-relaxed">
-                    加了錨點的路線為「實地追蹤」：隊員行到附近，追蹤儀自動觸發（隊員端不會顯示地圖，只顯示訊號強弱）
+                    加了錨點的路線為「實地追蹤」：隊員的地圖只顯示自己的位置（防迷路），
+                    行到符號附近自動觸發後才會標示在地圖上 — 下一個符號在哪不會預先顯示
                   </p>
                 </div>
 

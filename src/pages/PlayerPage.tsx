@@ -147,7 +147,8 @@ const PlayerPage: React.FC = () => {
           💡 <strong className="text-steel-light">玩法：</strong>領袖給你 QR Code 或完整路線代碼 →
           任務簡報（留意計時／倒計時模式）→ 沿途觀察符號＋箭頭方向 →
           判斷應做什麼 → 答對後<Gift size={10} className="inline text-gold" />揭露隱藏信物 →
-          跟隨指示前進直到「已回家」。全程<strong className="text-steel-light">沒有地圖</strong>，這是追蹤，不是看地圖尋寶。
+          跟隨指示前進直到「已回家」。地圖只顯示<strong className="text-steel-light">你的位置</strong>（防迷路），
+          行到符號附近才會觸發並標示 — 不會預先顯示目標在哪，這是追蹤，不是尋寶。
         </p>
       </div>
 

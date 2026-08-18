@@ -193,7 +193,7 @@ const LeaderPage: React.FC = () => {
               </div>
               {shareErr && <p className="mt-2 text-[11px] text-red text-center">{shareErr}</p>}
               <p className="mt-3 text-[11px] text-steel leading-relaxed text-center">
-                隊員掃描後會進入任務簡報，可見計時模式及最佳時間；追蹤全程沒有地圖，只靠符號指引。
+                隊員掃描後會進入任務簡報，可見計時模式及最佳時間；地圖只作定位防迷路，符號要行到觸發才會標示。
               </p>
 
               <div className="grid grid-cols-2 gap-2 mt-4">

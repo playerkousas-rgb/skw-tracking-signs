@@ -157,13 +157,15 @@ export function formatDuration(ms: number): string {
 }
 
 // ── GPS helpers ──
+// GPS 準確度加強：高精度、零快取（不用舊定位）、較短逾時
+// 部分安卓瀏覽器要配合 maximumAge:0 先會持續追求最佳定位
 export function getCurrentPosition(): Promise<{ lat: number; lng: number; accuracy: number }> {
   return new Promise((ok, no) => {
     if (!navigator.geolocation) { no(new Error('不支援GPS')); return; }
     navigator.geolocation.getCurrentPosition(
       p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
       e => no(new Error('定位失敗：' + e.message)),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
   });
 }
@@ -176,7 +178,7 @@ export function watchPosition(
   return navigator.geolocation.watchPosition(
     p => onPos(p.coords.latitude, p.coords.longitude, p.coords.accuracy),
     e => onErr(e.message),
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 }
 

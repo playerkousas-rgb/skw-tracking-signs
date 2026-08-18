@@ -1,9 +1,9 @@
 // 沿途追縱（任務模式）— 合併三版所長：
 // · 符號序列 + 判斷題（skw-tracking-signs）
 // · GPS 接近觸發（skw-tracking-signs2）
-// · 雷達訊號／語音導航／陷阱自由觸發（skw_tracking_signs）
+// · 語音導航／陷阱自由觸發／GPS 準確度警告（skw_tracking_signs）
 // · 計時及倒計時模式（新）
-// 隊員全程不看地圖 — 只靠追蹤符號指引完成任務。
+// 地圖只顯示你的位置＋已觸發符號（防迷路），不預先顯示下一個目標。
 // COPYRIGHT © 2026 SCOUT SYSTEM
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -12,11 +12,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle, XCircle, ArrowRight, Trophy, Footprints, Gift, AlertTriangle,
   Volume2, VolumeX, Timer as TimerIcon, Hourglass, Play, RotateCcw, Home,
-  RadioTower, MapPin, ShieldCheck, Loader2, ChevronRight,
+  MapPin, ShieldCheck, Loader2, ChevronRight, Search, Map as MapIcon, RadioTower,
 } from 'lucide-react';
 import SignSVG from '../components/SignSVG';
 import Confetti from '../components/Confetti';
-import SignRadar from '../components/SignRadar';
+import PlayerMap, { MapPin as TrailPin } from '../components/PlayerMap';
 import {
   getTrailById, saveResult, getBestTimeMs, formatDuration,
   watchPosition, clearWatch, getDist, isFieldTrail, seqSteps, trapSteps,
@@ -50,6 +50,10 @@ const TrailWalkPage: React.FC = () => {
   const [quizOptions, setQuizOptions] = useState<{ text: string; isCorrect: boolean }[]>([]);
   const [trapHit, setTrapHit] = useState<TrailStep | null>(null);
   const triggeredTraps = useRef<Set<number>>(new Set());  // step index
+
+  // 地圖釘：已觸發的符號（走過的痕跡）— 絕不預先顯示未觸發的
+  const [pins, setPins] = useState<TrailPin[]>([]);
+  const pinCountRef = useRef(0);
 
   // ── GPS ──
   const [pos, setPos] = useState<{ lat: number; lng: number; acc: number } | null>(null);
@@ -115,6 +119,9 @@ const TrailWalkPage: React.FC = () => {
     return () => clearInterval(t);
   }, [phase, startedAt, isCountdown, limitMs]);
 
+  // GPS 準確度門檻：劣質定位（>30m）只更新地圖，不用作觸發判決
+  const ACCURACY_GATE = 30;
+
   // ── GPS 監察（實地模式）：接近偵測在定位回調內進行 ──
   const trackRef = useRef({ phase, discovered, trapHit, step, trail, triggerDistance });
   useEffect(() => {
@@ -128,18 +135,26 @@ const TrailWalkPage: React.FC = () => {
         setPos({ lat, lng, acc }); setGpsErr('');
         const st = trackRef.current;
         if (st.phase !== 'tracking' || st.discovered || st.trapHit || !st.trail) return;
+        if (acc > ACCURACY_GATE) return; // 劣質定位不作觸發判決（加強準確度）
         // 陷阱：自由觸發（取自 v5.2）
         st.trail.steps.forEach((t, i) => {
           if (!t.trap || t.lat == null || t.lng == null || triggeredTraps.current.has(i) || trackRef.current.trapHit || trackRef.current.discovered) return;
           if (getDist(lat, lng, t.lat, t.lng) <= st.triggerDistance) {
             triggeredTraps.current.add(i);
             setTrapHit(t);
+            if (t.lat != null && t.lng != null) {
+              pinCountRef.current += 1;
+              setPins(prev => [...prev, {
+                key: `trap-${i}-${pinCountRef.current}`, lat: t.lat!, lng: t.lng!,
+                signId: t.signId, order: triggeredTraps.current.size, kind: 'trap',
+              }]);
+            }
             beep('wrong'); vibrate([250, 100, 250]);
             const s = getSignById(t.signId);
             speak(`注意！發現${s?.nameZh ?? '警告'}，${s?.action ?? ''}`);
           }
         });
-        // 主路徑：行到下一個符號觸發距離內
+        // 主路徑：行到下一個符號觸發距離內（不會預先知道在哪，行到先觸發）
         const cur = seqSteps(st.trail)[st.step];
         if (cur && cur.lat != null && cur.lng != null && !trackRef.current.discovered && !trackRef.current.trapHit) {
           if (getDist(lat, lng, cur.lat, cur.lng) <= st.triggerDistance) discoverRef.current(true);
@@ -158,6 +173,14 @@ const TrailWalkPage: React.FC = () => {
     beep('found'); vibrate([120, 60, 120, 60, 240]);
     const cur = seq[step];
     const sign = getSignById(cur?.signId);
+    // 已觸發 → 才標示在地圖上（走過的痕跡）
+    if (cur && cur.lat != null && cur.lng != null) {
+      pinCountRef.current += 1;
+      setPins(prev => [...prev.map(p => ({ ...p, current: false })), {
+        key: `seq-${step}-${pinCountRef.current}`, lat: cur.lat!, lng: cur.lng!,
+        signId: cur.signId, order: step + 1, kind: 'seq', current: true,
+      }]);
+    }
     speak(viaGps && sign ? `發現第${step + 1}站符號` : sign ? `第${step + 1}站，${sign.nameZh}` : '發現符號');
     if (quizMode && sign) {
       const correct = sign.action;
@@ -170,14 +193,6 @@ const TrailWalkPage: React.FC = () => {
 
   const discoverRef = useRef(discover);
   useEffect(() => { discoverRef.current = discover; });
-
-  // 與下一個符號的距離（只供雷達顯示訊號強弱）
-  const distToNext = useMemo(() => {
-    if (!isField || !pos) return null;
-    const t = seq[step];
-    if (!t || t.lat == null || t.lng == null) return null;
-    return getDist(pos.lat, pos.lng, t.lat, t.lng);
-  }, [isField, pos, seq, step]);
 
   // ── 開始任務 ──
   const startMission = () => {
@@ -349,7 +364,7 @@ const TrailWalkPage: React.FC = () => {
                 <div className="flex-1">
                   <p className="text-xs font-heading font-semibold text-ice">追蹤方式：{isField ? '實地追蹤（GPS）' : '模擬追蹤（課堂）'}</p>
                   <p className="text-[10px] text-steel mt-0.5">{isField
-                    ? `行到符號 ${triggerDistance} 米內，追蹤儀會通知你 — 請同時用眼觀察地面符號`
+                    ? `地圖只顯示你的位置（防迷路）＋已發現的符號；行到符號 ${triggerDistance} 米內自動觸發 — 下一個符號在哪，要靠你沿途觀察地面找出來`
                     : '一個符號接一個，模擬沿途觀察追蹤符號'}</p>
                 </div>
               </div>
@@ -393,8 +408,9 @@ const TrailWalkPage: React.FC = () => {
 
             <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5 mb-5">
               <p className="text-[10px] text-steel leading-relaxed text-center">
-                ⚠️ 這是<span className="text-steel-light">追蹤符號訓練</span>，不是看地圖尋寶 —
-                全程沒有地圖，請靠觀察地面符號及追蹤儀訊號完成任務。
+                ⚠️ 這是<span className="text-steel-light">追蹤符號訓練</span>，不是尋寶 —
+                地圖只讓你知道<span className="text-steel-light">自己在哪</span>（防止迷路），
+                不會顯示下一個符號的位置；請靠觀察地面符號，行到觸發才算找到。
               </p>
             </div>
 
@@ -413,14 +429,15 @@ const TrailWalkPage: React.FC = () => {
   const dangerTime = remainingMs != null && remainingMs <= 10500;
   const warnTime = remainingMs != null && remainingMs <= 60000 && !dangerTime;
   const curHasGps = curStep?.lat != null && curStep.lng != null;
-  const strength: 0 | 1 | 2 | 3 | 4 = !isField || !pos ? 0
-    : discovered ? 4
-    : distToNext == null ? 0
-    : distToNext <= triggerDistance ? 4
-    : distToNext <= triggerDistance * 3 ? 3
-    : distToNext <= 60 ? 2 : 1;
-  const safetyDist = isField && pos && trail.safetyLat != null && trail.safetyLng != null
-    ? getDist(pos.lat, pos.lng, trail.safetyLat, trail.safetyLng) : null;
+  // GPS 準確度等級（只作顯示，不用於引導方向）
+  const gpsQuality = !pos ? null
+    : pos.acc <= 10 ? { label: '優', cls: 'text-green border-green/25 bg-green/10' }
+    : pos.acc <= 20 ? { label: '良', cls: 'text-cyan border-cyan/25 bg-cyan/10' }
+    : pos.acc <= 30 ? { label: '可', cls: 'text-gold border-gold/25 bg-gold/10' }
+    : { label: '弱', cls: 'text-red border-red/25 bg-red/10' };
+  const safetyPoint = trail.safetyLat != null && trail.safetyLng != null
+    ? { lat: trail.safetyLat, lng: trail.safetyLng, note: trail.safetyNote }
+    : null;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#02133E' }}>
@@ -458,7 +475,7 @@ const TrailWalkPage: React.FC = () => {
         </motion.div>
 
         {/* GPS 訊號警告（取自 v5.2） */}
-        {isField && pos && pos.acc > 25 && (
+        {isField && pos && pos.acc > 30 && (
           <div className="gps-warning text-white text-[10px] font-black text-center py-1.5 mb-2 rounded-full border border-red/40">
             ⚠️ GPS 訊號微弱（±{Math.round(pos.acc)}m）：請移到開闊位置
           </div>
@@ -469,39 +486,68 @@ const TrailWalkPage: React.FC = () => {
           </div>
         )}
 
-        {/* ── 追蹤儀（實地）／站點卡（模擬） ── */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+        {/* ── GPS 狀態列 ── */}
+        {isField && (
+          <div className="mb-2 flex items-center justify-between">
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-heading font-bold border flex items-center gap-1 ${gpsQuality ? gpsQuality.cls : 'text-steel border-steel/15 bg-navy-800/70'}`}>
+              <MapIcon size={11} />
+              {pos ? `GPS ±${Math.round(pos.acc)}m ${gpsQuality?.label}` : gpsErr ? 'GPS 無訊號' : 'GPS 定位中…'}
+            </span>
+            {safetyPoint && (
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-heading font-bold border border-green/25 bg-green/10 text-green flex items-center gap-1">
+                <ShieldCheck size={11} />
+                {safetyPoint.note ? safetyPoint.note.slice(0, 10) : '安全集合點'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* ── 定位地圖（知道自己在哪）／站點卡（模擬） ── */}
+        <div className="flex-1 flex flex-col items-stretch gap-3 min-h-0">
           {isField ? (
             <>
-              <SignRadar
-                strength={strength}
-                distanceM={discovered ? null : distToNext}
-                accuracyM={pos?.acc ?? null}
-                label={!pos
-                  ? (gpsErr ? '⚠️ 定位中…請開啟GPS' : '📡 啟動追蹤儀…')
-                  : discovered ? '📍 發現符號！'
-                  : curHasGps ? ''
-                  : '⏭ 此站無GPS錨點，可手動確認'}
-              />
-              {!discovered && (
-                <button onClick={() => discover(false)}
-                  className="px-6 py-3 rounded-2xl bg-navy-800/80 border border-cyan/15 text-ice text-xs font-heading font-semibold flex items-center gap-2 card-hover">
-                  <MapPin size={14} className="text-cyan" />
-                  我已找到此符號（手動確認）
-                </button>
-              )}
-              {safetyDist != null && (
-                <p className="text-[10px] text-steel flex items-center gap-1">
-                  <ShieldCheck size={11} className="text-green" />
-                  距安全集合點 {safetyDist < 1000 ? `${Math.round(safetyDist)}m` : `${(safetyDist / 1000).toFixed(1)}km`}
-                  {trail.safetyNote ? ` · ${trail.safetyNote}` : ''}
-                </p>
-              )}
+              <div className="relative flex-1 min-h-[300px]">
+                <PlayerMap user={pos} pins={pins} safety={safetyPoint} />
+                {!pos && (
+                  <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-navy-950/70 rounded-2xl">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-navy-800/95 rounded-full border border-cyan/20 text-cyan text-xs font-heading">
+                      <Loader2 size={13} className="animate-spin" />
+                      {gpsErr ? 'GPS 失敗，請檢查權限／到戶外' : '衛星定位中…請到開闊位置'}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 狀態卡：尋找下一個符號（不會提供方向／距離提示 — 那是尋寶） */}
+              <div className="bg-navy-800/70 rounded-2xl border border-cyan/10 p-3.5 text-center">
+                {!discovered ? (
+                  <>
+                    <p className="text-ice font-heading font-semibold text-sm flex items-center justify-center gap-1.5">
+                      <Search size={15} className="text-cyan animate-pulse" />
+                      尋找第 {step + 1} 個追蹤符號…
+                    </p>
+                    <p className="text-[10px] text-steel mt-1">
+                      {curHasGps
+                        ? `沿途留意地面，行到符號 ${triggerDistance} 米內會自動觸發（地圖不會顯示位置）`
+                        : '⏭ 此站無GPS錨點，找到後可手動確認'}
+                    </p>
+                    {!discovered && (
+                      <button onClick={() => discover(false)}
+                        className="mt-2.5 px-5 py-2.5 rounded-xl bg-navy-900/90 border border-cyan/20 text-ice text-xs font-heading font-semibold flex items-center gap-2 card-hover mx-auto">
+                        <MapPin size={14} className="text-cyan" />
+                        我已找到此符號（手動確認）
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-green font-heading font-bold text-sm">📍 已觸發！查看符號指示</p>
+                )}
+              </div>
             </>
           ) : (
             /* 模擬模式：課堂／室內訓練 */
             !discovered && (
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex-1 flex flex-col items-center justify-center text-center">
                 <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-navy-800/70 border-2 border-cyan/20 flex items-center justify-center">
                   <span className="text-3xl font-heading font-bold text-cyan">{step + 1}</span>
                 </div>
@@ -657,14 +703,6 @@ const TrailWalkPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* 載入中指示（GPS 首次定位） */}
-      {phase === 'tracking' && isField && !pos && !gpsErr && (
-        <div className="fixed bottom-6 left-0 right-0 flex justify-center pointer-events-none">
-          <div className="flex items-center gap-2 px-4 py-2 bg-navy-800/90 rounded-full border border-cyan/20 text-cyan text-xs font-heading">
-            <Loader2 size={13} className="animate-spin" />追蹤儀定位中…
-          </div>
-        </div>
-      )}
     </div>
   );
 };

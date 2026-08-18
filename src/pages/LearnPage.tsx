@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, ArrowRight, AlertTriangle, Info, Flag, CornerUpLeft } from 'lucide-react';
+import { Search, X, ArrowRight, AlertTriangle, Info, Flag } from 'lucide-react';
 import SignSVG from '../components/SignSVG';
 import { trackingSigns, getSignsByCategory } from '../data/trackingSigns';
 
