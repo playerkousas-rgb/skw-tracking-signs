@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Share2, Check, Footprints, ArrowRight, QrCode, X, Copy, Link as LinkIcon, Download } from 'lucide-react';
 import QRCode from 'qrcode';
-import { getAllTrails, deleteTrail, encodeTrail, Trail } from '../lib/trailStore';
+import { getAllTrails, deleteTrail, encodeTrail, getBestTimeMs, formatDuration, isFieldTrail, trapSteps, Trail } from '../lib/trailStore';
 import SignSVG from '../components/SignSVG';
 import { getSignById } from '../data/trackingSigns';
 
@@ -100,7 +100,6 @@ const LeaderPage: React.FC = () => {
       ) : (
         <div className="space-y-2">
           {trails.map((trail, i) => {
-            const hasSafetyPoint = trail.safetyLat != null && trail.safetyLng != null;
             return (
               <motion.div key={trail.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                 className="bg-navy-800/60 rounded-2xl border border-cyan/8 overflow-hidden">
@@ -108,7 +107,19 @@ const LeaderPage: React.FC = () => {
                   <div className="w-10 h-10 rounded-xl bg-cyan/10 flex items-center justify-center shrink-0"><Footprints size={18} className="text-cyan" /></div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-heading font-semibold text-sm text-ice truncate">{trail.name}</h3>
-                    <p className="text-[10px] text-steel">{trail.steps.length} 個符號 · {hasSafetyPoint ? '已設安全地圖' : '未設安全地圖'} · {trail.id}</p>
+                    <p className="text-[10px] text-steel flex flex-wrap items-center gap-x-1.5">
+                      <span>{isFieldTrail(trail) ? '📍實地' : '🎬模擬'}</span>·
+                      <span>{(trail.timerMode ?? 'stopwatch') === 'countdown' && trail.timeLimitMin
+                        ? `⏳限時${trail.timeLimitMin}分` : '⏱計時'}</span>·
+                      <span>{trail.quizMode !== false ? '✏️判斷題' : '👁觀察'}</span>·
+                      <span>{trail.id}</span>
+                    </p>
+                    {(getBestTimeMs(trail.id) != null || trapSteps(trail).length > 0) && (
+                      <p className="text-[10px] mt-0.5">
+                        {getBestTimeMs(trail.id) != null && <span className="text-gold">🏅最佳 {formatDuration(getBestTimeMs(trail.id)!)}</span>}
+                        {trapSteps(trail).length > 0 && <span className="text-red ml-2">⚠️{trapSteps(trail).length}陷阱</span>}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {/* Steps preview */}
@@ -182,7 +193,7 @@ const LeaderPage: React.FC = () => {
               </div>
               {shareErr && <p className="mt-2 text-[11px] text-red text-center">{shareErr}</p>}
               <p className="mt-3 text-[11px] text-steel leading-relaxed text-center">
-                隊員掃描後會進入「沿途追蹤」頁，路線代碼會自動填好；地圖只作防迷路，不會顯示符號位置。
+                隊員掃描後會進入任務簡報，可見計時模式及最佳時間；追蹤全程沒有地圖，只靠符號指引。
               </p>
 
               <div className="grid grid-cols-2 gap-2 mt-4">
@@ -222,6 +233,8 @@ const LeaderPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <p className="text-center text-[9px] text-steel pt-3 tracking-widest">COPYRIGHT © 2026 SCOUT SYSTEM</p>
     </div>
   );
 };

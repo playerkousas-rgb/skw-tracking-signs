@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, X, Navigation, Loader2, AlertCircle, Edit3, MoveUp, MoveDown, ArrowUp, ArrowLeft as ArrowLeftIcon, ArrowRight, Map as MapIcon, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Plus, X, Navigation, Loader2, AlertCircle, Edit3, MoveUp, MoveDown, ArrowUp, ArrowLeft as ArrowLeftIcon, ArrowRight, Map as MapIcon, ChevronDown, ChevronUp, ShieldCheck, MapPin, Timer as TimerIcon, Hourglass, Zap } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import SignSVG from '../components/SignSVG';
 import { trackingSigns, getSignById } from '../data/trackingSigns';
-import { saveTrail, getTrailById, generateTrailId, getCurrentPosition, TrailStep, Direction } from '../lib/trailStore';
+import { saveTrail, getTrailById, generateTrailId, getCurrentPosition, TrailStep, Direction, TimerMode, DEFAULT_TRIGGER_DISTANCE } from '../lib/trailStore';
 
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
@@ -52,7 +52,7 @@ const LeaderCreatePage: React.FC = () => {
 
   const [name, setName] = useState(existing?.name || '');
   const [steps, setSteps] = useState<TrailStep[]>(
-    (existing?.steps || []).map(({ signId, direction, paces, hiddenContent }) => ({ signId, direction, paces, hiddenContent }))
+    (existing?.steps || []).map(({ signId, direction, paces, hiddenContent, lat, lng, trap }) => ({ signId, direction, paces, hiddenContent, lat, lng, trap }))
   );
   const [error, setError] = useState('');
   const [gpsLat, setGpsLat] = useState<number | null>(null);
@@ -65,7 +65,15 @@ const LeaderCreatePage: React.FC = () => {
   const [configDirection, setConfigDirection] = useState<Direction>('forward');
   const [configPaces, setConfigPaces] = useState(6);
   const [configContent, setConfigContent] = useState('');
+  const [configAnchor, setConfigAnchor] = useState<{ lat: number; lng: number } | null>(null);
+  const [configTrap, setConfigTrap] = useState(false);
   const [editIdx, setEditIdx] = useState<number | null>(null);
+
+  // ── 任務設定（計時／倒計時／觸發距離／判斷題）──
+  const [triggerDistance, setTriggerDistance] = useState(existing?.triggerDistance ?? DEFAULT_TRIGGER_DISTANCE);
+  const [timerMode, setTimerMode] = useState<TimerMode>(existing?.timerMode ?? 'stopwatch');
+  const [timeLimitMin, setTimeLimitMin] = useState(existing?.timeLimitMin ?? 10);
+  const [quizMode, setQuizMode] = useState(existing?.quizMode !== false);
 
   const [mapOpen, setMapOpen] = useState(false);
   const [safetyLat, setSafetyLat] = useState<number | null>(existing?.safetyLat ?? null);
@@ -105,6 +113,8 @@ const LeaderCreatePage: React.FC = () => {
     setConfigDirection('forward');
     setConfigPaces(sign?.needsPaces ? 6 : 0);
     setConfigContent('');
+    setConfigAnchor(null);
+    setConfigTrap(false);
     setConfigStep({ signId });
   };
 
@@ -114,6 +124,18 @@ const LeaderCreatePage: React.FC = () => {
     if (!safetyNote.trim()) setSafetyNote('集合點 / 安全返回點');
   };
 
+  // 走到哪放到哪：用目前 GPS 位置做此符號的實地錨點（取自 v2／v5.2）
+  const anchorHere = async () => {
+    setGpsLoading(true); setGpsErr('');
+    try {
+      const p = await getCurrentPosition();
+      setGpsLat(p.lat); setGpsLng(p.lng);
+      setConfigAnchor({ lat: p.lat, lng: p.lng });
+    } catch (e: unknown) {
+      setGpsErr(e instanceof Error ? e.message : '定位失敗');
+    } finally { setGpsLoading(false); }
+  };
+
   const confirmStep = () => {
     if (!configStep) return;
     const sign = getSignById(configStep.signId);
@@ -121,6 +143,8 @@ const LeaderCreatePage: React.FC = () => {
     if (sign?.needsDirection) step.direction = configDirection;
     if (sign?.needsPaces) step.paces = configPaces;
     if (configContent.trim()) step.hiddenContent = configContent.trim();
+    if (configAnchor) { step.lat = configAnchor.lat; step.lng = configAnchor.lng; }
+    if (configTrap && sign?.isWarning) step.trap = true;
 
     if (editIdx !== null) {
       setSteps(prev => { const n = [...prev]; n[editIdx] = step; return n; });
@@ -138,6 +162,8 @@ const LeaderCreatePage: React.FC = () => {
     setConfigDirection(s.direction || 'forward');
     setConfigPaces(s.paces || (sign?.needsPaces ? 6 : 0));
     setConfigContent(s.hiddenContent || '');
+    setConfigAnchor(s.lat != null && s.lng != null ? { lat: s.lat, lng: s.lng } : null);
+    setConfigTrap(s.trap === true);
     setConfigStep({ signId: s.signId });
   };
 
@@ -150,14 +176,20 @@ const LeaderCreatePage: React.FC = () => {
 
   const handleSave = () => {
     setError('');
+    const seq = steps.filter(s => !s.trap);
     if (!name.trim()) { setError('請輸入路線名稱'); return; }
-    if (steps.length < 2) { setError('至少需要2個符號（起點和終點）'); return; }
-    if (steps[steps.length - 1].signId !== 4) { setError('路線最後一個符號必須是「已回家」'); return; }
+    if (seq.length < 2) { setError('至少需要2個順序符號（起點和終點）'); return; }
+    if (seq[seq.length - 1].signId !== 4) { setError('順序路線最後一個符號必須是「已回家」（陷阱符號不計）'); return; }
+    if (timerMode === 'countdown' && (!timeLimitMin || timeLimitMin < 1)) { setError('倒計時模式請設定至少 1 分鐘時限'); return; }
     saveTrail({
       id: existing?.id || generateTrailId(),
       name: name.trim(),
       steps,
       createdAt: existing?.createdAt || Date.now(),
+      triggerDistance,
+      timerMode,
+      ...(timerMode === 'countdown' ? { timeLimitMin } : {}),
+      quizMode,
       ...(safetyLat != null && safetyLng != null ? { safetyLat, safetyLng } : {}),
       ...(safetyNote.trim() ? { safetyNote: safetyNote.trim() } : {}),
     });
@@ -248,6 +280,80 @@ const LeaderCreatePage: React.FC = () => {
         </AnimatePresence>
       </div>
 
+      {/* ── 任務設定：計時／倒計時／觸發距離／判斷題 ── */}
+      <div className="bg-navy-800/50 rounded-2xl p-4 border border-cyan/10 space-y-4">
+        <h3 className="font-heading font-semibold text-sm text-ice-dim flex items-center gap-1.5">
+          <TimerIcon size={14} className="text-cyan" />任務模式設定
+        </h3>
+
+        {/* 計時 vs 倒計時 */}
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => setTimerMode('stopwatch')}
+            className={`p-3 rounded-xl border text-left transition-all ${timerMode === 'stopwatch'
+              ? 'bg-green/10 border-green/30' : 'bg-navy-800 border-cyan/5'}`}>
+            <TimerIcon size={16} className={timerMode === 'stopwatch' ? 'text-green' : 'text-steel'} />
+            <p className={`font-heading font-semibold text-xs mt-1 ${timerMode === 'stopwatch' ? 'text-green' : 'text-steel'}`}>⏱ 計時模式</p>
+            <p className="text-[9px] text-steel mt-0.5 leading-tight">時間向上計，挑戰最佳時間</p>
+          </button>
+          <button type="button" onClick={() => setTimerMode('countdown')}
+            className={`p-3 rounded-xl border text-left transition-all ${timerMode === 'countdown'
+              ? 'bg-red/10 border-red/30' : 'bg-navy-800 border-cyan/5'}`}>
+            <Hourglass size={16} className={timerMode === 'countdown' ? 'text-red' : 'text-steel'} />
+            <p className={`font-heading font-semibold text-xs mt-1 ${timerMode === 'countdown' ? 'text-red' : 'text-steel'}`}>⏳ 倒計時模式</p>
+            <p className="text-[9px] text-steel mt-0.5 leading-tight">限時內完成，歸零即失敗</p>
+          </button>
+        </div>
+
+        {timerMode === 'countdown' && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
+            <div className="flex items-center gap-3 p-3 bg-navy-900/60 rounded-xl border border-red/15">
+              <span className="text-xs text-steel font-heading shrink-0">限時</span>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setTimeLimitMin(m => Math.max(1, m - 5))}
+                  className="w-9 h-9 rounded-full bg-navy-800 text-ice font-heading font-bold border border-cyan/10">−</button>
+                <span className="text-xl font-heading font-bold text-red w-14 text-center tabular-nums">{timeLimitMin}<span className="text-[10px] text-steel ml-0.5">分</span></span>
+                <button type="button" onClick={() => setTimeLimitMin(m => Math.min(120, m + 5))}
+                  className="w-9 h-9 rounded-full bg-navy-800 text-ice font-heading font-bold border border-cyan/10">+</button>
+              </div>
+              <div className="flex gap-1 ml-auto">
+                {[5, 10, 15, 30].map(m => (
+                  <button key={m} type="button" onClick={() => setTimeLimitMin(m)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-heading font-bold border ${timeLimitMin === m ? 'bg-red/15 text-red border-red/30' : 'bg-navy-800 text-steel border-cyan/5'}`}>
+                    {m}分
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* GPS 觸發距離（實地符號） */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs text-steel font-heading flex items-center gap-1">
+              <MapPin size={12} className="text-cyan" />GPS 觸發距離（實地符號用）
+            </label>
+            <span className="text-cyan font-mono font-bold text-sm">{triggerDistance} 米</span>
+          </div>
+          <input type="range" min={3} max={20} step={1} value={triggerDistance}
+            onChange={e => setTriggerDistance(parseInt(e.target.value, 10))}
+            className="w-full accent-cyan" />
+          <p className="text-[9px] text-steel mt-1">隊員行到符號此距離內，追蹤儀便會觸發。越小越精準（建議 5～10 米）</p>
+        </div>
+
+        {/* 判斷題開關 */}
+        <button type="button" onClick={() => setQuizMode(q => !q)}
+          className="w-full flex items-center justify-between p-3 bg-navy-900/60 rounded-xl border border-cyan/10">
+          <div className="text-left">
+            <p className="font-heading font-semibold text-xs text-ice flex items-center gap-1.5"><Zap size={13} className="text-gold" />符號判斷題</p>
+            <p className="text-[9px] text-steel mt-0.5">發現符號後要答對「應對行動」 — 成功運用符號先算完成</p>
+          </div>
+          <span className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${quizMode ? 'bg-green/40' : 'bg-navy-700'}`}>
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${quizMode ? 'left-[22px]' : 'left-0.5'}`} />
+          </span>
+        </button>
+      </div>
+
       {/* ── 符號列表 ── */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -282,8 +388,10 @@ const LeaderCreatePage: React.FC = () => {
                         {step.paces != null && step.paces > 0 && <span className="text-[10px] text-gold bg-gold/10 px-1.5 py-0.5 rounded">{step.paces}步</span>}
                       </h4>
                       {step.hiddenContent && <p className="text-[10px] text-steel truncate">📦 {step.hiddenContent}</p>}
-                      {i === 0 && <span className="text-[9px] text-cyan">起點</span>}
-                      {i === steps.length - 1 && <span className="text-[9px] text-green">終點</span>}
+                      {step.lat != null && <span className="inline-flex items-center gap-0.5 text-[9px] text-green bg-green/10 px-1.5 py-0.5 rounded mr-1">📍GPS</span>}
+                      {step.trap && <span className="inline-flex items-center gap-0.5 text-[9px] text-red bg-red/10 px-1.5 py-0.5 rounded">⚠️陷阱</span>}
+                      {i === 0 && !step.trap && <span className="text-[9px] text-cyan">起點</span>}
+                      {i === steps.length - 1 && !step.trap && <span className="text-[9px] text-green">終點</span>}
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <button onClick={() => moveStep(i, -1)} disabled={i === 0} className="p-1 text-steel hover:text-ice disabled:opacity-20"><MoveUp size={14} /></button>
@@ -307,7 +415,8 @@ const LeaderCreatePage: React.FC = () => {
 
       <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
         <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">提示：</strong>這是追蹤，不是尋寶。地圖只用作防迷路，請不要把追蹤符號位置標在地圖上；隊員應靠觀察地面符號前進。
+          💡 <strong className="text-steel-light">提示：</strong>這是追蹤，不是尋寶。隊員全程不看地圖 —
+          靠地面符號指引前進；GPS 錨點只令追蹤儀在行近時通知，配合「符號判斷題」確保隊員真正讀懂符號。
         </p>
       </div>
 
@@ -425,6 +534,44 @@ const LeaderCreatePage: React.FC = () => {
                     className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-sm"
                   />
                 </div>
+
+                {/* 實地 GPS 錨點：走到哪放到哪 */}
+                <div className="mb-4 p-3 bg-navy-800/60 rounded-xl border border-cyan/10">
+                  <label className="block text-xs text-steel font-heading mb-2 flex items-center gap-1">
+                    <MapPin size={12} className="text-green" />實地 GPS 錨點（可選）
+                  </label>
+                  {configAnchor ? (
+                    <div className="flex items-center justify-between p-2.5 bg-green/10 rounded-lg border border-green/20">
+                      <span className="text-[10px] text-green font-mono">
+                        📍 {configAnchor.lat.toFixed(5)}, {configAnchor.lng.toFixed(5)}
+                      </span>
+                      <button type="button" onClick={() => setConfigAnchor(null)}
+                        className="text-[10px] text-red px-2 py-1 rounded bg-red/10 border border-red/20">移除</button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={anchorHere} disabled={gpsLoading}
+                      className="w-full py-2.5 rounded-lg bg-green/10 text-green border border-green/25 text-xs font-heading font-semibold disabled:opacity-50 flex items-center justify-center gap-1.5">
+                      {gpsLoading ? <><Loader2 size={13} className="animate-spin" />定位中…</> : <><Navigation size={13} />走到哪放到哪 — 用目前位置</>}
+                    </button>
+                  )}
+                  <p className="text-[9px] text-steel mt-1.5 leading-relaxed">
+                    加了錨點的路線為「實地追蹤」：隊員行到附近，追蹤儀自動觸發（隊員端不會顯示地圖，只顯示訊號強弱）
+                  </p>
+                </div>
+
+                {/* 陷阱：警告類符號可設為自由觸發 */}
+                {s.isWarning && (
+                  <button type="button" onClick={() => setConfigTrap(t => !t)}
+                    className={`w-full mb-4 flex items-center justify-between p-3 rounded-xl border transition-all ${configTrap ? 'bg-red/10 border-red/30' : 'bg-navy-800/60 border-cyan/10'}`}>
+                    <div className="text-left">
+                      <p className={`font-heading font-semibold text-xs ${configTrap ? 'text-red' : 'text-steel'}`}>⚠️ 設為陷阱（自由觸發）</p>
+                      <p className="text-[9px] text-steel mt-0.5">不按順序，隊員行近即彈出警告 — 放在錯路／危險位置</p>
+                    </div>
+                    <span className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${configTrap ? 'bg-red/50' : 'bg-navy-700'}`}>
+                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${configTrap ? 'left-[22px]' : 'left-0.5'}`} />
+                    </span>
+                  </button>
+                )}
 
                 <button onClick={confirmStep}
                   className="w-full py-3 bg-cyan/10 text-cyan rounded-xl font-heading font-bold border border-cyan/20 card-hover">
