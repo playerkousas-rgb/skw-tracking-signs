@@ -134,6 +134,28 @@ html { scroll-behavior: smooth; }
 /* Safe area for mobile */
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
 
+/* ── 追蹤儀雷達（取自 v5.2 雷達概念）── */
+@keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.radar-sweep {
+  background: conic-gradient(from 0deg, rgba(0, 212, 255, 0.30), rgba(0, 212, 255, 0.05) 55deg, transparent 70deg);
+  animation: radar-sweep 2.8s linear infinite;
+  border-radius: 9999px;
+}
+
+/* GPS 訊號微弱警告（取自 v5.2） */
+@keyframes warn-flash {
+  0%, 100% { background: rgba(255, 51, 102, 0.18); }
+  50% { background: rgba(255, 51, 102, 0.40); }
+}
+.gps-warning { animation: warn-flash 1s infinite; }
+
+/* 倒計時最後倒數 — 紅色閃爍 */
+@keyframes timer-danger {
+  0%, 100% { border-color: rgba(255, 51, 102, 0.55); box-shadow: 0 0 14px rgba(255, 51, 102, 0.10); }
+  50% { border-color: rgba(255, 51, 102, 1); box-shadow: 0 0 22px rgba(255, 51, 102, 0.30); }
+}
+.timer-danger { animation: timer-danger 0.55s infinite; }
+
 /* ── Leaflet overrides (light tiles, visible) ── */
 .leaflet-container {
   background: #e8e4df !important;

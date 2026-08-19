@@ -43,12 +43,20 @@ const HomePage: React.FC = () => {
 
       {/* Stats bar */}
       <motion.div variants={itemV} className="flex items-center justify-center gap-6 py-3 px-6 bg-navy-800/50 rounded-2xl border border-cyan/5">
-        {[{ value: '10', label: '官方符號' }, { value: '4', label: '符號類別' }, { value: '沿路', label: '追蹤模式' }].map((s, i) => (
+        {[{ value: '10', label: '官方符號' }, { value: '2', label: '計時模式' }, { value: '沿路', label: '符號指引' }].map((s, i) => (
           <div key={i} className="text-center">
             <div className="text-lg font-heading font-bold text-ice">{s.value}</div>
             <div className="text-[10px] text-steel">{s.label}</div>
           </div>
         ))}
+      </motion.div>
+
+      {/* 追蹤 ≠ 看地圖 */}
+      <motion.div variants={itemV} className="p-3 bg-gold/5 rounded-2xl border border-gold/15">
+        <p className="text-[11px] text-gold leading-relaxed text-center font-heading font-semibold">
+          🐾 追蹤 ≠ 尋寶 —
+          <span className="text-steel-light font-normal"> 地圖只讓你知道自己在哪、防止迷路；下一個符號在哪要靠你沿途觀察地面找出來，配合 ⏱計時／⏳倒計時完成任務</span>
+        </p>
       </motion.div>
 
       {/* Cards */}
@@ -72,8 +80,8 @@ const HomePage: React.FC = () => {
         })}
       </motion.div>
 
-      <motion.p variants={itemV} className="text-center text-[10px] text-steel pt-2 pb-4">
-        © 2026 SKW SCOUT · 童軍追蹤符號訓練工具
+      <motion.p variants={itemV} className="text-center text-[10px] text-steel pt-2 pb-4 tracking-widest">
+        COPYRIGHT © 2026 SCOUT SYSTEM · SKW TRACKING
       </motion.p>
     </motion.div>
   );

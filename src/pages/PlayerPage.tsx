@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Compass, ClipboardPaste, LogIn, History, Gift, QrCode } from 'lucide-react';
-import { getTrailById, decodeTrail, saveTrail, getAllResults } from '../lib/trailStore';
+import { Compass, ClipboardPaste, LogIn, History, Gift, QrCode, Timer as TimerIcon, Hourglass } from 'lucide-react';
+import { getTrailById, decodeTrail, saveTrail, getAllResults, formatDuration, isFieldTrail } from '../lib/trailStore';
 
 const PlayerPage: React.FC = () => {
   const nav = useNavigate();
@@ -45,16 +45,44 @@ const PlayerPage: React.FC = () => {
     catch { setError('無法讀取剪貼簿，請手動貼上'); }
   };
 
-  const recentResults = getAllResults().slice(-3).reverse();
+  const recentResults = getAllResults().slice(-5).reverse();
   const cameFromQr = Boolean(sp.get('code'));
+  const previewTrail = (() => {
+    const input = code.trim();
+    if (!input) return null;
+    if (input.length > 40 || input.includes('eyJ')) return decodeTrail(input);
+    return getTrailById(input) ?? null;
+  })();
 
   return (
     <div className="space-y-4">
       <div className="text-center pt-2 pb-1">
         <Compass size={36} className="text-cyan mx-auto mb-2" />
         <h1 className="text-xl font-heading font-bold text-ice glow-cyan">沿途追蹤</h1>
-        <p className="text-xs text-steel mt-1">輸入路線代碼，觀察符號箭頭，尋找隱藏信物</p>
+        <p className="text-xs text-steel mt-1">輸入路線代碼，靠追蹤符號指引完成任務</p>
       </div>
+
+      {/* 已填入代碼時顯示任務預覽 */}
+      {previewTrail && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="p-3 bg-navy-800/60 rounded-xl border border-cyan/10 space-y-1.5">
+          <p className="text-sm font-heading font-semibold text-ice">{previewTrail.name}</p>
+          <div className="flex flex-wrap gap-1.5 text-[10px]">
+            <span className="px-2 py-1 rounded-full bg-cyan/10 text-cyan border border-cyan/20">
+              {isFieldTrail(previewTrail) ? '📍 實地追蹤 GPS' : '🎬 模擬追蹤'}
+            </span>
+            <span className={`px-2 py-1 rounded-full border ${previewTrail.timerMode === 'countdown' && previewTrail.timeLimitMin
+              ? 'bg-red/10 text-red border-red/20' : 'bg-green/10 text-green border-green/20'} flex items-center gap-1`}>
+              {previewTrail.timerMode === 'countdown' && previewTrail.timeLimitMin
+                ? <><Hourglass size={10} />限時 {previewTrail.timeLimitMin} 分鐘</>
+                : <><TimerIcon size={10} />計時挑戰</>}
+            </span>
+            <span className="px-2 py-1 rounded-full bg-gold/10 text-gold border border-gold/20">
+              {previewTrail.steps.filter(s => !s.trap).length} 站
+            </span>
+          </div>
+        </motion.div>
+      )}
 
       {cameFromQr && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
@@ -95,12 +123,19 @@ const PlayerPage: React.FC = () => {
             {recentResults.map((r, i) => (
               <div key={i} className="bg-navy-800/40 rounded-lg px-3 py-2 flex items-center justify-between">
                 <div className="min-w-0">
-                  <span className="text-xs text-ice font-heading">{r.playerName}</span>
+                  <span className="text-xs text-ice font-heading">
+                    {r.timeUp ? '⏳' : r.success ? '✅' : '❌'} {r.playerName}
+                  </span>
                   <span className="text-[10px] text-steel ml-2">{r.trailId}</span>
                 </div>
-                <span className={`text-xs font-heading font-bold ${r.correctSteps === r.totalSteps ? 'text-green' : r.correctSteps >= r.totalSteps / 2 ? 'text-gold' : 'text-red'}`}>
-                  {r.correctSteps}/{r.totalSteps}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] text-steel font-mono flex items-center gap-0.5">
+                    <TimerIcon size={10} />{formatDuration(r.elapsedMs)}
+                  </span>
+                  <span className={`text-xs font-heading font-bold ${r.correctSteps === r.totalSteps ? 'text-green' : r.correctSteps >= r.totalSteps / 2 ? 'text-gold' : 'text-red'}`}>
+                    {r.correctSteps}/{r.totalSteps}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -109,9 +144,15 @@ const PlayerPage: React.FC = () => {
 
       <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
         <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">玩法：</strong>領袖給你 QR Code 或完整路線代碼，沿途觀察符號+箭頭方向→判斷應做什麼→答對後<Gift size={10} className="inline text-gold" />揭露隱藏信物→繼續前進直到「已回家」。
+          💡 <strong className="text-steel-light">玩法：</strong>領袖給你 QR Code 或完整路線代碼 →
+          任務簡報（留意計時／倒計時模式）→ 沿途觀察符號＋箭頭方向 →
+          判斷應做什麼 → 答對後<Gift size={10} className="inline text-gold" />揭露隱藏信物 →
+          跟隨指示前進直到「已回家」。地圖只顯示<strong className="text-steel-light">你的位置</strong>（防迷路），
+          行到符號附近才會觸發並標示 — 不會預先顯示目標在哪，這是追蹤，不是尋寶。
         </p>
       </div>
+
+      <p className="text-center text-[9px] text-steel pt-2 tracking-widest">COPYRIGHT © 2026 SCOUT SYSTEM</p>
     </div>
   );
 };

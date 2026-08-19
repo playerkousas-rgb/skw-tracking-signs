@@ -18,7 +18,6 @@ const SignSVG: React.FC<SignSVGProps> = ({ signId, size = 140, className = '', g
   const s = size;
   const pad = s * 0.15;
   const inner = s - pad * 2;
-  const sw = inner * 0.12;
   if (direction) {
     // 有方向時縮小主符號，旁邊放箭頭
     const mainSize = s * 0.7;

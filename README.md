@@ -1,73 +1,103 @@
-# React + TypeScript + Vite
+# SKW 追蹤符號追蹤訓練 APP
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**COPYRIGHT © 2026 SCOUT SYSTEM · SKW TRACKING**
 
-Currently, two official plugins are available:
+合併三個版本所長（取長補短）的手機友善童軍追蹤符號訓練工具。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+> 🐾 **這是追蹤（Tracking），不是尋寶** —
+> 地圖只讓隊員知道**自己在哪**（防止迷路）；下一個符號在哪**不會預先顯示**，
+> 要靠隊員沿途觀察地面追蹤符號，**行到觸發**後才會標示在地圖上。
 
-## React Compiler
+## 版本合併：取長補短
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| 來源 | 取其所長 |
+|---|---|
+| `skw-tracking-signs` | 10 種官方追蹤符號圖鑑（天然材料 SVG 畫風）、符號判斷題、路線分享（QR／代碼）、防迷路安全點 |
+| `skw-tracking-signs2` | GPS 接近觸發符號、「走到哪放到哪」實地放置、音效提示、觸發半徑設定 |
+| `skw_tracking_signs`（v5.2 HTML） | 廣東話語音導航、陷阱符號自由觸發、GPS 準確度警告、震動提示 |
 
-## Expanding the ESLint configuration
+## 核心玩法：成功運用追蹤符號完成任務
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. **領袖**建立任務：按順序排符號（可設箭頭方向、步數、隱藏信物）
+2. 有 GPS 錨點的符號 → **實地追蹤**：走到哪放到哪，隊員行近自動觸發
+3. 警告類符號可設為**陷阱** — 不按順序，行近即彈出警告（錯路／危險／分岔）
+4. 隊員發現符號後要答對「**應對行動**」— 答對才算成功運用符號
+5. 跟隨指示前進，直到「已回家」🎯
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 🗺 定位地圖的設計原則（防迷路 ≠ 尋寶）
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+| 顯示 ✅ | 不顯示 ❌ |
+|---|---|
+| 你的即時位置（脈衝點＋準確度圈，防迷路） | 下一個符號在哪（**絕不**預先顯示） |
+| 已觸發的符號（走過的痕跡，金框＝最新） | 距離／方向提示（沒有冷熱感應，那是尋寶） |
+| 走過的路線（虛線麵包屑） | |
+| 安全集合點 SAFE | |
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- 符號**行到觸發距離內才會出現在地圖上** — 玩家要自己沿途觀察地面找到為止
+- 雷達式「接近提示」已刻意移除：訊號強弱會令追蹤變質成尋寶熱冷遊戲
+
+## 📡 GPS 準確度加強
+
+- `enableHighAccuracy` ＋ `maximumAge: 0`（絕不用舊快取定位）＋ 短逾時重試
+- **準確度門檻**：誤差 > 30m 的定位只更新地圖，不用作符號觸發判決（防誤觸）
+- GPS 品質即時顯示：優（≤10m）／良（≤20m）／可（≤30m）／弱（>30m 警告閃爍）
+- 地圖如實畫出誤差圈，讓隊員知道自己定位的可信度
+
+## ⏱ 計時及倒計時模式（新）
+
+| 模式 | 說明 |
+|---|---|
+| **⏱ 計時模式** | 時間向上計，完成後記錄用時，可挑戰路線**最佳時間** 🏅 |
+| **⏳ 倒計時模式** | 領袖設定限時（分鐘）；時間歸零任務即失敗。最後 60 秒語音警告，最後 10 秒滴答提示 |
+
+- 任務簡報顯示模式與最佳時間
+- 完成畫面顯示用時、符號判斷成績、是否新最佳時間
+- 領袖路線列表顯示 🏅 最佳時間紀錄
+
+## 📱 手機友善設計
+
+- 底部導覽列、大按鈕（≥44px 觸控目標）、safe-area 劉海支援
+- 定位地圖自動跟隨移動，拖動即停跟隨；一鍵「回到我的位置」📱
+- 網頁震動提示（`navigator.vibrate`）、Web Audio 音效（無需檔案）
+- 廣東話語音導航（`speechSynthesis` zh-HK，可開關 🔊／🔇）
+- GPS 訊號微弱時閃爍警告（準確度 > 25m）
+- 全部資料存 localStorage（離線可用），72 小時自動清除
+
+## 頁面
+
+| 頁面 | 功能 |
+|---|---|
+| 首頁 | 模式總覽、追蹤 ≠ 看地圖提示 |
+| 符號圖鑑 | 10 種符號：分類、搜尋、意思及應對動作 |
+| 設計任務 | 領袖建路線：符號順序＋GPS 錨點＋陷阱＋計時模式＋觸發距離＋安全點 |
+| 沿途追蹤 | 輸入代碼／掃 QR → 任務簡報 → 追蹤儀 → 完成成績 |
+
+## 技術棧
+
+- React 19 + TypeScript + Vite 7
+- Tailwind CSS v4、Framer Motion、Lucide Icons
+- Leaflet（**只**用於領袖端設定安全點 — 隊員端全程無地圖）
+- qrcode（路線分享）
+
+## 本地開發
+
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 構建
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
 ```
+
+## 部署到 Vercel
+
+1. Fork 或 Clone 此項目到你的 GitHub
+2. 在 Vercel 中導入 GitHub 項目
+3. 自動部署完成
+
+---
+
+**COPYRIGHT © 2026 SCOUT SYSTEM. ALL RIGHTS RESERVED.**
