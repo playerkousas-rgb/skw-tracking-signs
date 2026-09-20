@@ -109,8 +109,85 @@ npm run check      # 型別檢查 + ESLint 一次過
 | `.vercelignore` | CLI 部署（`vercel deploy`）時不上傳：`node_modules`、`dist`、建置快取、`*.bak`/`*.tmp`/`*.old`/`*.log`、`uploads/`、環境檔 |
 | `.gitignore` | Git 整合部署時同樣排除上述項目，`dist/` **不入版本控制**（由遠端建置產生） |
 
-> 🧹 **儲存空間守則**：建置產物 `dist/` 一律不 commit，避免倉庫與 Vercel 上傳包重複膨脹；
-> 只在 `dependencies` 放執行期真正用到的套件，Vite / Tailwind / TypeScript 等建置工具一律放 `devDependencies`。
+> ⚠️ 改任何設定前，先讀下面「🧹 防增肥守則」。
+
+---
+
+## 🧹 防增肥守則（改版前必讀，勿刪）
+
+> 本專案曾把 `dist/` commit 進 git，光這一項就佔掉全部追蹤內容的 **67.5%（754.8 KB）**。
+> 2026-09 已清理（commit `9a399ef`）：追蹤內容由 **37 檔 / 1,118.7 KB** 降到 **31 檔 / 307.2 KB（−72.5%）**。
+> 那是當時的數字，**現在的即時數字請用第 5 節的指令自己跑**。
+> 以下是防止復胖的硬性規則。**新增目錄、新增套件、新增素材之前，先對照這張表。**
+
+### 1. 絕對不准 commit 的東西
+
+| 項目 | 為什麼 | 由誰把關 |
+|---|---|---|
+| `dist/` | 建置產物，Vercel 遠端會自己 `npm run build` 產生；commit 等於同一份內容存兩次 | `.gitignore` |
+| `node_modules/` | 本機 200 MB，Vercel 用 `npm ci` 自行安裝 | `.gitignore` + `.vercelignore` |
+| `*.bak` `*.tmp` `*.old` `*.orig` `*.log` | 開發過程死重 | `.gitignore` + `.vercelignore` |
+| `uploads/` `tmp/` `temp/` | 測試上傳資料 | `.gitignore` + `.vercelignore` |
+| `.env` `.env.*` `*.local` | 環境檔（含機密） | `.gitignore` + `.vercelignore` |
+| `.DS_Store` `*.tsbuildinfo` `.vite/` `.cache/` | 系統／快取殘留 | `.gitignore` + `.vercelignore` |
+
+**新增任何工具或產物目錄時，`.gitignore` 與 `.vercelignore` 要「兩個都加」**
+（前者管 Git 整合部署，後者管 `vercel deploy` CLI 上傳，缺一條就會漏）。
+
+### 2. `dependencies` vs `devDependencies`
+
+- `dependencies` **只放瀏覽器執行期真的會 import 的套件**。目前僅 8 個：
+  `react`、`react-dom`、`react-router-dom`、`framer-motion`、`lucide-react`、`leaflet`、`react-leaflet`、`qrcode`。
+- **建置工具一律放 `devDependencies`**：`vite`、`@vitejs/plugin-react`、`tailwindcss`、`@tailwindcss/vite`、`typescript`、`eslint*`、以及所有 `@types/*`。
+- 新裝套件前先問三句：
+  1. 執行期真的需要嗎？（純建置用 → `devDependencies`）
+  2. 現有套件能不能做到？（例：圖示已有 `lucide-react`，不要再裝第二套 icon 庫）
+  3. 體積多少？（`npm i` 後看 `du -sh node_modules`，以及 build 後的 `dist/assets/*.js` gzip 大小）
+- 裝完執行 `npm run build`，把新的 gzip 數字記進 PR 描述，體積明顯上升要說明原因。
+
+### 3. 靜態素材
+
+- `public/` 下每個檔案都要**能在 code 裡 grep 到引用**，否則就是死重。
+  檢查方式：`grep -rn "檔名" src/ index.html`。
+- 大圖（截圖、設計原稿、展示圖）**不要進 repo**，放外部圖床或 issue 附件。
+- 素材用完即刪，不要「先留著」。
+
+### 4. ⚠️ Tailwind v4 的 `.gitignore` 陷阱（踩過，別再踩）
+
+**Tailwind v4 的自動來源掃描會遵守 `.gitignore`。**
+以前 `dist/` 沒被忽略，Tailwind 把舊建置產物當原始碼掃，多吐了 11 個沒在用的
+utility（`container`、`sticky`、`italic`、`ring`…），CSS 虛胖 1.36 kB。
+反過來說：**如果你把某個含 class 的檔案加進 `.gitignore`，Tailwind 就不會再掃描它**，
+樣式可能無聲消失。改 `.gitignore` 後務必 `npm run build` 並比對 CSS 大小。
+
+### 5. 合併前檢查清單（複製這一段到 PR 描述逐項打勾）
+
+```
+[ ] git status 乾淨，且 git ls-files 沒有 dist/、node_modules/、*.bak、*.log、uploads/
+[ ] git ls-files | wc -l 與追蹤內容大小沒有無理由上升
+[ ] 新增套件已確認歸類正確（建置工具在 devDependencies）
+[ ] public/ 新增的每個檔案都能在 src/ 或 index.html grep 到引用
+[ ] npm ci 成功（Vercel 用的就是這條）
+[ ] npm run build 通過（exit 0）
+[ ] npm run check 通過，或新增的 error 已在 PR 說明
+[ ] 新增的目錄已同時加入 .gitignore 與 .vercelignore
+```
+
+一行版自查：
+
+```bash
+git ls-files -z | xargs -0 stat -c '%s' | awk '{s+=$1;n++} END {printf "%d files, %.1f KB\n", n, s/1024}'
+git ls-files | grep -E '^(dist/|node_modules/)|\.(bak|tmp|old|log)$' && echo '❌ 有死重' || echo '✅ 無死重'
+```
+
+### 6. 尚未解決、已知的事
+
+- `.git/` 內仍留著舊 `dist/` 的歷史 blob（約 540 KB）。停止追蹤只保證**未來**的
+  checkout 與上傳包乾淨；要回收歷史體積需 `git filter-repo` 改寫歷史 + force push，
+  屬破壞性操作，需另行決議。
+- `npm run lint` 目前有 **6 個既有 error**（`react-hooks` 系列 5 個、`no-unused-vars` 1 個），
+  位於 `Confetti.tsx`、`SignSVG.tsx`、`LeaderCreatePage.tsx`、`PlayerPage.tsx`、`TrailWalkPage.tsx`。
+  這些是清理之前就存在的，修它們會動到執行期 effect 邏輯，尚未處理。
 
 ---
 
