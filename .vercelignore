@@ -1,0 +1,47 @@
+# ============================================================
+#  .vercelignore — 部署時「絕不上傳」清單
+#  注意：此檔對 `vercel deploy`（CLI 上傳）生效；
+#  Git 整合部署則由 .gitignore + vercel.json 的 outputDirectory 把關。
+#  ⚠️ 請勿把 src/、index.html、package.json、package-lock.json、
+#     vite.config.ts、tsconfig*.json 加進來 —— 遠端建置需要它們。
+# ============================================================
+
+# --- 版本控制與 Vercel 本地狀態 ---
+.git
+.gitignore
+.gitattributes
+.vercel
+
+# --- 依賴（Vercel 會自行 npm ci 安裝，不需上傳 200MB）---
+node_modules
+
+# --- 建置產物與快取（遠端建置會重新產生，上傳是重複浪費）---
+dist
+.vite
+.cache
+.next
+.turbo
+.parcel-cache
+.svelte-kit
+coverage
+*.tsbuildinfo
+
+# --- 備份／暫存／日誌／編輯器殘留（開發過程死重）---
+*.bak
+*.tmp
+*.old
+*.orig
+*.rej
+*.log
+*~
+.DS_Store
+Thumbs.db
+
+# --- 測試上傳資料與本機環境檔 ---
+uploads/
+tmp/
+temp/
+.env
+.env.*
+.env.local
+*.local

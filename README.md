@@ -86,17 +86,128 @@ npm install
 npm run dev
 ```
 
-## 構建
+## 構建與驗證
 
 ```bash
-npm run build
+npm run build      # tsc -b && vite build（產出 dist/）
+npm run typecheck  # 只做 TypeScript 型別檢查
+npm run lint       # ESLint
+npm run check      # 型別檢查 + ESLint 一次過
 ```
 
 ## 部署到 Vercel
 
 1. Fork 或 Clone 此項目到你的 GitHub
 2. 在 Vercel 中導入 GitHub 項目
-3. 自動部署完成
+3. 自動部署完成（`vercel.json` 已固定設定，無需手動填寫）
+
+### 部署設定說明
+
+| 檔案 | 作用 |
+|---|---|
+| `vercel.json` | 固定 `installCommand: npm ci`、`buildCommand: npm run build`、`outputDirectory: dist`；`rewrites` 把深連結導回 `index.html`（本專案用 `BrowserRouter`，缺了它 `/leader`、`/play/:trailId` 重新整理會 404） |
+| `.vercelignore` | CLI 部署（`vercel deploy`）時不上傳：`node_modules`、`dist`、建置快取、`*.bak`/`*.tmp`/`*.old`/`*.log`、`uploads/`、環境檔 |
+| `.gitignore` | Git 整合部署時同樣排除上述項目，`dist/` **不入版本控制**（由遠端建置產生） |
+
+> ⚠️ 改任何設定前，先讀下面「🧹 防增肥守則」。
+
+---
+
+## 🧹 防增肥守則（改版前必讀，勿刪）
+
+> 本專案曾把 `dist/` commit 進 git，光這一項就佔掉全部追蹤內容的 **67.5%（754.8 KB）**。
+> 2026-09 已清理（commit `9a399ef`）：追蹤內容由 **37 檔 / 1,118.7 KB** 降到 **31 檔 / 307.2 KB（−72.5%）**。
+> 那是當時的數字，**現在的即時數字請用第 5 節的指令自己跑**。
+> 以下是防止復胖的硬性規則。**新增目錄、新增套件、新增素材之前，先對照這張表。**
+
+### 1. 絕對不准 commit 的東西
+
+| 項目 | 為什麼 | 由誰把關 |
+|---|---|---|
+| `dist/` | 建置產物，Vercel 遠端會自己 `npm run build` 產生；commit 等於同一份內容存兩次 | `.gitignore` |
+| `node_modules/` | 本機 200 MB，Vercel 用 `npm ci` 自行安裝 | `.gitignore` + `.vercelignore` |
+| `*.bak` `*.tmp` `*.old` `*.orig` `*.log` | 開發過程死重 | `.gitignore` + `.vercelignore` |
+| `uploads/` `tmp/` `temp/` | 測試上傳資料 | `.gitignore` + `.vercelignore` |
+| `.env` `.env.*` `*.local` | 環境檔（含機密） | `.gitignore` + `.vercelignore` |
+| `.DS_Store` `*.tsbuildinfo` `.vite/` `.cache/` | 系統／快取殘留 | `.gitignore` + `.vercelignore` |
+
+**新增任何工具或產物目錄時，`.gitignore` 與 `.vercelignore` 要「兩個都加」**
+（前者管 Git 整合部署，後者管 `vercel deploy` CLI 上傳，缺一條就會漏）。
+
+### 2. `dependencies` vs `devDependencies`
+
+- `dependencies` **只放瀏覽器執行期真的會 import 的套件**。目前僅 8 個：
+  `react`、`react-dom`、`react-router-dom`、`framer-motion`、`lucide-react`、`leaflet`、`react-leaflet`、`qrcode`。
+- **建置工具一律放 `devDependencies`**：`vite`、`@vitejs/plugin-react`、`tailwindcss`、`@tailwindcss/vite`、`typescript`、`eslint*`、以及所有 `@types/*`。
+- 新裝套件前先問三句：
+  1. 執行期真的需要嗎？（純建置用 → `devDependencies`）
+  2. 現有套件能不能做到？（例：圖示已有 `lucide-react`，不要再裝第二套 icon 庫）
+  3. 體積多少？（`npm i` 後看 `du -sh node_modules`，以及 build 後的 `dist/assets/*.js` gzip 大小）
+- 裝完執行 `npm run build`，把新的 gzip 數字記進 PR 描述，體積明顯上升要說明原因。
+
+### 3. 靜態素材
+
+- `public/` 下每個檔案都要**能在 code 裡 grep 到引用**，否則就是死重。
+  檢查方式：`grep -rn "檔名" src/ index.html`。
+- 大圖（截圖、設計原稿、展示圖）**不要進 repo**，放外部圖床或 issue 附件。
+- 素材用完即刪，不要「先留著」。
+
+### 4. ⚠️ Tailwind v4 的 `.gitignore` 陷阱（踩過，別再踩）
+
+**Tailwind v4 的自動來源掃描會遵守 `.gitignore`。**
+以前 `dist/` 沒被忽略，Tailwind 把舊建置產物當原始碼掃，多吐了 11 個沒在用的
+utility（`container`、`sticky`、`italic`、`ring`…），CSS 虛胖 1.36 kB。
+反過來說：**如果你把某個含 class 的檔案加進 `.gitignore`，Tailwind 就不會再掃描它**，
+樣式可能無聲消失。改 `.gitignore` 後務必 `npm run build` 並比對 CSS 大小。
+
+### 4b. ⚠️ `vercel.json` 的鍵名陷阱（踩過，別再踩）
+
+Vercel 的 `vercel.json` schema 頂層是 **`"additionalProperties": false`** ——
+**寫錯一個鍵名，整個部署會「立即失敗」**（約 20 秒就報錯，連 build 都不會跑），
+而且 GitHub 上只顯示 `Deployment has failed`，看不到原因。
+
+2026-09 實際踩到：加了 `"cleanDistPath": true`（那是 Dashboard 的設定項，不是
+`vercel.json` 的合法鍵）→ PR 的 Vercel check 直接 fail。移除該鍵後部署即恢復成功。
+
+規則：
+
+- `vercel.json` **只放確定合法的鍵**。目前只用這 6 個：
+  `$schema`、`framework`、`installCommand`、`buildCommand`、`outputDirectory`、`rewrites`。
+- 想加新鍵，先去 <https://openapi.vercel.sh/vercel.json> 確認該鍵存在，別憑印象寫。
+- **改完 `vercel.json` 一定要看 PR 上的 Vercel check 是否 `pass`**，本地 `npm run build`
+  通過**不代表** Vercel 設定合法。
+- Dashboard 的 Build Settings 會覆寫 `vercel.json`，兩邊要一致。
+
+### 5. 合併前檢查清單（複製這一段到 PR 描述逐項打勾）
+
+```
+[ ] git status 乾淨，且 git ls-files 沒有 dist/、node_modules/、*.bak、*.log、uploads/
+[ ] git ls-files | wc -l 與追蹤內容大小沒有無理由上升
+[ ] 新增套件已確認歸類正確（建置工具在 devDependencies）
+[ ] public/ 新增的每個檔案都能在 src/ 或 index.html grep 到引用
+[ ] npm ci 成功（Vercel 用的就是這條）
+[ ] npm run build 通過（exit 0）
+[ ] npm run check 通過，或新增的 error 已在 PR 說明
+[ ] 新增的目錄已同時加入 .gitignore 與 .vercelignore
+[ ] PR 的 Vercel check 顯示 pass（改了 vercel.json / .vercelignore 必查）
+[ ] 部署後實測深連結：/leader、/play/:trailId 重新整理不會 404
+```
+
+一行版自查：
+
+```bash
+git ls-files -z | xargs -0 stat -c '%s' | awk '{s+=$1;n++} END {printf "%d files, %.1f KB\n", n, s/1024}'
+git ls-files | grep -E '^(dist/|node_modules/)|\.(bak|tmp|old|log)$' && echo '❌ 有死重' || echo '✅ 無死重'
+```
+
+### 6. 尚未解決、已知的事
+
+- `.git/` 內仍留著舊 `dist/` 的歷史 blob（約 540 KB）。停止追蹤只保證**未來**的
+  checkout 與上傳包乾淨；要回收歷史體積需 `git filter-repo` 改寫歷史 + force push，
+  屬破壞性操作，需另行決議。
+- `npm run lint` 目前有 **6 個既有 error**（`react-hooks` 系列 5 個、`no-unused-vars` 1 個），
+  位於 `Confetti.tsx`、`SignSVG.tsx`、`LeaderCreatePage.tsx`、`PlayerPage.tsx`、`TrailWalkPage.tsx`。
+  這些是清理之前就存在的，修它們會動到執行期 effect 邏輯，尚未處理。
 
 ---
 

@@ -1,4 +1,25 @@
+# --- 依賴 ---
 node_modules/
-*.local
-.DS_Store
+
+# --- 建置產物（由 `npm run build` 產生，不入版本控制；Vercel 遠端建置）---
+dist/
 *.tsbuildinfo
+
+# --- 備份／暫存／日誌殘留 ---
+*.bak
+*.tmp
+*.old
+*.orig
+*.log
+
+# --- 系統與本機檔案 ---
+.DS_Store
+*.local
+
+# --- Vercel 本地設定與環境檔 ---
+.vercel
+.env
+.env.*
+
+# --- 測試上傳資料 ---
+uploads/
