@@ -86,17 +86,31 @@ npm install
 npm run dev
 ```
 
-## 構建
+## 構建與驗證
 
 ```bash
-npm run build
+npm run build      # tsc -b && vite build（產出 dist/）
+npm run typecheck  # 只做 TypeScript 型別檢查
+npm run lint       # ESLint
+npm run check      # 型別檢查 + ESLint 一次過
 ```
 
 ## 部署到 Vercel
 
 1. Fork 或 Clone 此項目到你的 GitHub
 2. 在 Vercel 中導入 GitHub 項目
-3. 自動部署完成
+3. 自動部署完成（`vercel.json` 已固定設定，無需手動填寫）
+
+### 部署設定說明
+
+| 檔案 | 作用 |
+|---|---|
+| `vercel.json` | 固定 `installCommand: npm ci`、`buildCommand: npm run build`、`outputDirectory: dist`；`rewrites` 把深連結導回 `index.html`（本專案用 `BrowserRouter`，缺了它 `/leader`、`/play/:trailId` 重新整理會 404） |
+| `.vercelignore` | CLI 部署（`vercel deploy`）時不上傳：`node_modules`、`dist`、建置快取、`*.bak`/`*.tmp`/`*.old`/`*.log`、`uploads/`、環境檔 |
+| `.gitignore` | Git 整合部署時同樣排除上述項目，`dist/` **不入版本控制**（由遠端建置產生） |
+
+> 🧹 **儲存空間守則**：建置產物 `dist/` 一律不 commit，避免倉庫與 Vercel 上傳包重複膨脹；
+> 只在 `dependencies` 放執行期真正用到的套件，Vite / Tailwind / TypeScript 等建置工具一律放 `devDependencies`。
 
 ---
 
