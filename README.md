@@ -160,6 +160,24 @@ utility（`container`、`sticky`、`italic`、`ring`…），CSS 虛胖 1.36 kB�
 反過來說：**如果你把某個含 class 的檔案加進 `.gitignore`，Tailwind 就不會再掃描它**，
 樣式可能無聲消失。改 `.gitignore` 後務必 `npm run build` 並比對 CSS 大小。
 
+### 4b. ⚠️ `vercel.json` 的鍵名陷阱（踩過，別再踩）
+
+Vercel 的 `vercel.json` schema 頂層是 **`"additionalProperties": false`** ——
+**寫錯一個鍵名，整個部署會「立即失敗」**（約 20 秒就報錯，連 build 都不會跑），
+而且 GitHub 上只顯示 `Deployment has failed`，看不到原因。
+
+2026-09 實際踩到：加了 `"cleanDistPath": true`（那是 Dashboard 的設定項，不是
+`vercel.json` 的合法鍵）→ PR 的 Vercel check 直接 fail。移除該鍵後部署即恢復成功。
+
+規則：
+
+- `vercel.json` **只放確定合法的鍵**。目前只用這 6 個：
+  `$schema`、`framework`、`installCommand`、`buildCommand`、`outputDirectory`、`rewrites`。
+- 想加新鍵，先去 <https://openapi.vercel.sh/vercel.json> 確認該鍵存在，別憑印象寫。
+- **改完 `vercel.json` 一定要看 PR 上的 Vercel check 是否 `pass`**，本地 `npm run build`
+  通過**不代表** Vercel 設定合法。
+- Dashboard 的 Build Settings 會覆寫 `vercel.json`，兩邊要一致。
+
 ### 5. 合併前檢查清單（複製這一段到 PR 描述逐項打勾）
 
 ```
@@ -171,6 +189,8 @@ utility（`container`、`sticky`、`italic`、`ring`…），CSS 虛胖 1.36 kB�
 [ ] npm run build 通過（exit 0）
 [ ] npm run check 通過，或新增的 error 已在 PR 說明
 [ ] 新增的目錄已同時加入 .gitignore 與 .vercelignore
+[ ] PR 的 Vercel check 顯示 pass（改了 vercel.json / .vercelignore 必查）
+[ ] 部署後實測深連結：/leader、/play/:trailId 重新整理不會 404
 ```
 
 一行版自查：
