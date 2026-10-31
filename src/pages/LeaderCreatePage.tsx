@@ -1,404 +1,330 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, X, Navigation, Loader2, AlertCircle, Edit3, MoveUp, MoveDown, ArrowUp, ArrowLeft as ArrowLeftIcon, ArrowRight, Map as MapIcon, ChevronDown, ChevronUp, ShieldCheck, MapPin, Timer as TimerIcon, Hourglass, Zap } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import {
+  Plus, X, MoveUp, MoveDown, Edit3, MapPin, ArrowUp, ArrowLeft as ArrowLeftIcon, ArrowRight,
+  Timer as TimerIcon, Hourglass, Crosshair, Loader2, AlertTriangle, Check, ShieldCheck, ScanLine,
+} from 'lucide-react';
 import SignSVG from '../components/SignSVG';
+import CameraStage from '../components/CameraStage';
+import ArSign from '../components/ArSign';
 import { trackingSigns, getSignById } from '../data/trackingSigns';
-import { saveTrail, getTrailById, generateTrailId, getCurrentPosition, TrailStep, Direction, TimerMode, DEFAULT_TRIGGER_DISTANCE } from '../lib/trailStore';
+import { useCamera } from '../lib/camera';
+import { usePose } from '../lib/pose';
+import { compassLabel, pad3 } from '../lib/geo';
+import {
+  saveTrail, getTrailById, generateTrailId, DEFAULT_TRIGGER_DISTANCE, getCurrentPosition,
+  TrailStep, Trail, Direction, TimerMode,
+} from '../lib/trailStore';
+import { Btn, Card, Note, PageHeader, Sheet } from '../components/ui';
+import { beep, vibrate } from '../lib/speech';
 
-import iconUrl from 'leaflet/dist/images/marker-icon.png';
-import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
-const DefaultIcon = L.icon({ iconUrl, shadowUrl, iconSize: [25, 41], iconAnchor: [12, 41] });
-L.Marker.prototype.options.icon = DefaultIcon;
+interface Draft {
+  index: number | null;
+  signId: number;
+  direction: Direction;
+  paces: number;
+  hiddenContent: string;
+  note: string;
+  trap: boolean;
+  lat?: number;
+  lng?: number;
+  bearing?: number;
+}
 
-const safetyIcon: L.DivIcon = (() => {
-  const el = document.createElement('div');
-  el.innerHTML = `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#00ff88;border:3px solid #ffffff;box-shadow:0 0 16px rgba(0,255,136,0.55);font-family:Fredoka,sans-serif;font-size:11px;font-weight:800;color:#02133E;">SAFE</div>`;
-  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [34, 34], iconAnchor: [17, 17] });
-})();
+const DIRS: { value: Direction; label: string; icon: React.ReactNode }[] = [
+  { value: 'forward', label: '前方', icon: <ArrowUp size={13} /> },
+  { value: 'left', label: '左方', icon: <ArrowLeftIcon size={13} /> },
+  { value: 'right', label: '右方', icon: <ArrowRight size={13} /> },
+];
 
-const posIcon: L.DivIcon = (() => {
-  const el = document.createElement('div');
-  el.innerHTML = '<div style="width:18px;height:18px;border-radius:50%;background:#00d4ff;border:3px solid white;box-shadow:0 0 14px rgba(0,212,255,0.6);"></div>';
-  return L.divIcon({ html: el.innerHTML, className: '', iconSize: [18, 18], iconAnchor: [9, 9] });
-})();
-
-const MapClickHandler: React.FC<{ onClick: (lat: number, lng: number) => void }> = ({ onClick }) => {
-  useMapEvents({ click(e) { onClick(e.latlng.lat, e.latlng.lng); } });
-  return null;
-};
-
-const RecenterOnce: React.FC<{ lat: number; lng: number }> = ({ lat, lng }) => {
-  const map = useMap();
-  useEffect(() => { map.setView([lat, lng], 15); }, [lat, lng, map]);
-  return null;
-};
-
-const DEFAULT_CENTER: [number, number] = [22.3193, 114.1694];
-
-const DIR_OPTIONS: { value: Direction; label: string; icon: React.ReactNode }[] = [
-  { value: 'forward', label: '前方', icon: <ArrowUp size={14} /> },
-  { value: 'left', label: '左方', icon: <ArrowLeftIcon size={14} /> },
-  { value: 'right', label: '右方', icon: <ArrowRight size={14} /> },
+const CATS: { key: 'direction' | 'warning' | 'info' | 'end'; label: string }[] = [
+  { key: 'direction', label: '方向指示' },
+  { key: 'warning', label: '警告標記' },
+  { key: 'info', label: '資訊提示' },
+  { key: 'end', label: '結束標記' },
 ];
 
 const LeaderCreatePage: React.FC = () => {
   const nav = useNavigate();
   const [sp] = useSearchParams();
-  const editId = sp.get('edit');
-  const existing = editId ? getTrailById(editId) : null;
+  const existing = sp.get('edit') ? getTrailById(sp.get('edit')!) : undefined;
 
-  const [name, setName] = useState(existing?.name || '');
-  const [steps, setSteps] = useState<TrailStep[]>(
-    (existing?.steps || []).map(({ signId, direction, paces, hiddenContent, lat, lng, trap }) => ({ signId, direction, paces, hiddenContent, lat, lng, trap }))
-  );
-  const [error, setError] = useState('');
-  const [gpsLat, setGpsLat] = useState<number | null>(null);
-  const [gpsLng, setGpsLng] = useState<number | null>(null);
-  const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsErr, setGpsErr] = useState('');
-
-  const [showPicker, setShowPicker] = useState(false);
-  const [configStep, setConfigStep] = useState<{ signId: number } | null>(null);
-  const [configDirection, setConfigDirection] = useState<Direction>('forward');
-  const [configPaces, setConfigPaces] = useState(6);
-  const [configContent, setConfigContent] = useState('');
-  const [configAnchor, setConfigAnchor] = useState<{ lat: number; lng: number } | null>(null);
-  const [configTrap, setConfigTrap] = useState(false);
-  const [editIdx, setEditIdx] = useState<number | null>(null);
-
-  // ── 任務設定（計時／倒計時／觸發距離／判斷題）──
+  const [name, setName] = useState(existing?.name ?? '');
+  const [leaderNote, setLeaderNote] = useState(existing?.leaderNote ?? '');
+  const [steps, setSteps] = useState<TrailStep[]>(existing?.steps ?? []);
   const [triggerDistance, setTriggerDistance] = useState(existing?.triggerDistance ?? DEFAULT_TRIGGER_DISTANCE);
   const [timerMode, setTimerMode] = useState<TimerMode>(existing?.timerMode ?? 'stopwatch');
-  const [timeLimitMin, setTimeLimitMin] = useState(existing?.timeLimitMin ?? 10);
+  const [timeLimitMin, setTimeLimitMin] = useState(existing?.timeLimitMin ?? 15);
   const [quizMode, setQuizMode] = useState(existing?.quizMode !== false);
+  const [arMode, setArMode] = useState(existing?.arMode !== false);
+  const [safetyNote, setSafetyNote] = useState(existing?.safetyNote ?? '');
+  const [safety, setSafety] = useState<{ lat: number; lng: number } | null>(
+    existing?.safetyLat != null && existing?.safetyLng != null
+      ? { lat: existing.safetyLat, lng: existing.safetyLng }
+      : null
+  );
 
-  const [mapOpen, setMapOpen] = useState(false);
-  const [safetyLat, setSafetyLat] = useState<number | null>(existing?.safetyLat ?? null);
-  const [safetyLng, setSafetyLng] = useState<number | null>(existing?.safetyLng ?? null);
-  const [safetyNote, setSafetyNote] = useState(existing?.safetyNote || '');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [placing, setPlacing] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const [safetyBusy, setSafetyBusy] = useState(false);
 
-  const initLat = safetyLat ?? DEFAULT_CENTER[0];
-  const initLng = safetyLng ?? DEFAULT_CENTER[1];
+  const cam = useCamera();
+  const pose = usePose(placing);
 
-  const requestGps = useCallback(async () => {
-    setGpsLoading(true); setGpsErr('');
-    try {
-      const p = await getCurrentPosition();
-      setGpsLat(p.lat); setGpsLng(p.lng);
-    } catch (e: unknown) {
-      setGpsErr(e instanceof Error ? e.message : '定位失敗');
-    } finally { setGpsLoading(false); }
-  }, []);
+  const draftSign = draft ? getSignById(draft.signId) : null;
 
-  const useGpsAsSafetyPoint = useCallback(async () => {
-    setGpsLoading(true); setGpsErr('');
-    try {
-      const p = await getCurrentPosition();
-      setGpsLat(p.lat); setGpsLng(p.lng);
-      setSafetyLat(p.lat); setSafetyLng(p.lng);
-      if (!safetyNote.trim()) setSafetyNote('集合點 / 安全返回點');
-    } catch (e: unknown) {
-      setGpsErr(e instanceof Error ? e.message : '定位失敗');
-    } finally { setGpsLoading(false); }
-  }, [safetyNote]);
-
-  useEffect(() => { requestGps(); }, [requestGps]);
-
-  const pickSign = (signId: number) => {
+  const openNew = (signId: number) => {
     const sign = getSignById(signId);
-    setShowPicker(false);
-    setConfigDirection('forward');
-    setConfigPaces(sign?.needsPaces ? 6 : 0);
-    setConfigContent('');
-    setConfigAnchor(null);
-    setConfigTrap(false);
-    setConfigStep({ signId });
+    setPickerOpen(false);
+    setDraft({
+      index: null, signId,
+      direction: 'forward',
+      paces: sign?.needsPaces ? 8 : 0,
+      hiddenContent: '', note: '', trap: false,
+    });
   };
 
-  const mapClick = (lat: number, lng: number) => {
-    setSafetyLat(lat);
-    setSafetyLng(lng);
-    if (!safetyNote.trim()) setSafetyNote('集合點 / 安全返回點');
+  const openEdit = (i: number) => {
+    const s = steps[i];
+    setDraft({
+      index: i, signId: s.signId,
+      direction: s.direction ?? 'forward',
+      paces: s.paces ?? 0,
+      hiddenContent: s.hiddenContent ?? '',
+      note: s.note ?? '',
+      trap: !!s.trap,
+      lat: s.lat, lng: s.lng, bearing: s.bearing,
+    });
   };
 
-  // 走到哪放到哪：用目前 GPS 位置做此符號的實地錨點（取自 v2／v5.2）
-  const anchorHere = async () => {
-    setGpsLoading(true); setGpsErr('');
-    try {
-      const p = await getCurrentPosition();
-      setGpsLat(p.lat); setGpsLng(p.lng);
-      setConfigAnchor({ lat: p.lat, lng: p.lng });
-    } catch (e: unknown) {
-      setGpsErr(e instanceof Error ? e.message : '定位失敗');
-    } finally { setGpsLoading(false); }
+  const commitDraft = () => {
+    if (!draft) return;
+    const sign = getSignById(draft.signId);
+    const step: TrailStep = { signId: draft.signId };
+    if (sign?.needsDirection) step.direction = draft.direction;
+    if (sign?.needsPaces && draft.paces > 0) step.paces = draft.paces;
+    if (draft.hiddenContent.trim()) step.hiddenContent = draft.hiddenContent.trim();
+    if (draft.note.trim()) step.note = draft.note.trim();
+    if (draft.lat != null && draft.lng != null) { step.lat = draft.lat; step.lng = draft.lng; }
+    if (draft.bearing != null) step.bearing = draft.bearing;
+    if (draft.trap && sign?.isWarning) step.trap = true;
+
+    setSteps(prev => {
+      if (draft.index == null) return [...prev, step];
+      const n = [...prev];
+      n[draft.index] = step;
+      return n;
+    });
+    setDraft(null);
   };
 
-  const confirmStep = () => {
-    if (!configStep) return;
-    const sign = getSignById(configStep.signId);
-    const step: TrailStep = { signId: configStep.signId };
-    if (sign?.needsDirection) step.direction = configDirection;
-    if (sign?.needsPaces) step.paces = configPaces;
-    if (configContent.trim()) step.hiddenContent = configContent.trim();
-    if (configAnchor) { step.lat = configAnchor.lat; step.lng = configAnchor.lng; }
-    if (configTrap && sign?.isWarning) step.trap = true;
-
-    if (editIdx !== null) {
-      setSteps(prev => { const n = [...prev]; n[editIdx] = step; return n; });
-      setEditIdx(null);
-    } else {
-      setSteps(prev => [...prev, step]);
+  const dropHere = useCallback(() => {
+    if (pose.lat == null || pose.lng == null) {
+      setError('仲未收到 GPS — 行去空曠啲嘅位置再試');
+      return;
     }
-    setConfigStep(null);
-  };
+    setDraft(d => (d ? {
+      ...d,
+      lat: pose.lat!,
+      lng: pose.lng!,
+      bearing: pose.heading ?? undefined,
+    } : d));
+    setPlacing(false);
+    cam.stop();
+    beep('correct');
+    vibrate([30, 40, 30]);
+    setFlash(true);
+    window.setTimeout(() => setFlash(false), 1200);
+  }, [pose.lat, pose.lng, pose.heading, cam]);
 
-  const startEdit = (idx: number) => {
-    const s = steps[idx];
-    const sign = getSignById(s.signId);
-    setEditIdx(idx);
-    setConfigDirection(s.direction || 'forward');
-    setConfigPaces(s.paces || (sign?.needsPaces ? 6 : 0));
-    setConfigContent(s.hiddenContent || '');
-    setConfigAnchor(s.lat != null && s.lng != null ? { lat: s.lat, lng: s.lng } : null);
-    setConfigTrap(s.trap === true);
-    setConfigStep({ signId: s.signId });
-  };
-
-  const removeStep = (i: number) => setSteps(prev => prev.filter((_, j) => j !== i));
-  const moveStep = (i: number, dir: -1 | 1) => {
-    const ni = i + dir;
-    if (ni < 0 || ni >= steps.length) return;
-    setSteps(prev => { const n = [...prev]; [n[i], n[ni]] = [n[ni], n[i]]; return n; });
-  };
-
-  const handleSave = () => {
+  const save = () => {
     setError('');
-    const seq = steps.filter(s => !s.trap);
+    const seqIndexes = steps.map((s, i) => ({ s, i })).filter(x => !x.s.trap);
     if (!name.trim()) { setError('請輸入路線名稱'); return; }
-    if (seq.length < 2) { setError('至少需要2個順序符號（起點和終點）'); return; }
-    if (seq[seq.length - 1].signId !== 4) { setError('順序路線最後一個符號必須是「已回家」（陷阱符號不計）'); return; }
-    if (timerMode === 'countdown' && (!timeLimitMin || timeLimitMin < 1)) { setError('倒計時模式請設定至少 1 分鐘時限'); return; }
-    saveTrail({
-      id: existing?.id || generateTrailId(),
+    if (seqIndexes.length < 2) { setError('最少要有 2 個順序符號（起點同「已回家」）'); return; }
+    const last = seqIndexes[seqIndexes.length - 1].s;
+    if (last.signId !== 4) { setError('順序路線最後一個符號必須係「已回家」'); return; }
+    if (timerMode === 'countdown' && timeLimitMin < 1) { setError('倒計時最少 1 分鐘'); return; }
+
+    const trail: Trail = {
+      v: 6,
+      id: existing?.id ?? generateTrailId(),
       name: name.trim(),
       steps,
-      createdAt: existing?.createdAt || Date.now(),
+      createdAt: existing?.createdAt ?? Date.now(),
       triggerDistance,
       timerMode,
       ...(timerMode === 'countdown' ? { timeLimitMin } : {}),
       quizMode,
-      ...(safetyLat != null && safetyLng != null ? { safetyLat, safetyLng } : {}),
+      arMode,
+      ...(leaderNote.trim() ? { leaderNote: leaderNote.trim() } : {}),
+      ...(safety ? { safetyLat: safety.lat, safetyLng: safety.lng } : {}),
       ...(safetyNote.trim() ? { safetyNote: safetyNote.trim() } : {}),
-    });
-    nav('/leader');
+    };
+    saveTrail(trail);
+    setSaved(true);
+    const needPlacement = steps.some(s => s.lat == null || s.lng == null);
+    window.setTimeout(() => nav(needPlacement ? `/leader/place/${trail.id}` : '/leader'), 650);
   };
 
-  const cats = [
-    { key: 'direction' as const, label: '方向指示' },
-    { key: 'warning' as const, label: '警告標記' },
-    { key: 'info' as const, label: '資訊提示' },
-    { key: 'end' as const, label: '結束標記' },
-  ];
+  const placedCount = steps.filter(s => s.lat != null && s.lng != null).length;
+  const seqCount = steps.filter(s => !s.trap).length;
 
-  const hasSafetyPoint = safetyLat != null && safetyLng != null;
+  const previewProjection = { xPct: 50, yPct: 62 };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <button onClick={() => nav('/leader')} className="p-2 -ml-2 rounded-xl text-steel hover:text-ice"><ArrowLeft size={20} /></button>
-        <h1 className="text-xl font-heading font-bold text-ice">{existing ? '編輯路線' : '建立路線'}</h1>
-      </div>
+    <div className="space-y-3.5 pb-6">
+      <PageHeader
+        kicker={existing ? 'EDIT ROUTE' : 'NEW ROUTE'}
+        title={existing ? '編輯路線' : '建立路線'}
+        sub="先排符號，再行一次現場逐個放低。有座標嘅符號先會用相機 AR 顯示。"
+        back={() => nav('/leader')}
+      />
 
-      <div>
-        <label className="block text-xs text-steel mb-1.5 font-heading">路線名稱</label>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="例：公園樹林追蹤路線"
-          className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-sm" />
-      </div>
+      {/* 名稱 */}
+      <Card className="p-3.5 space-y-3">
+        <div>
+          <label className="stamp text-ink-4 block mb-1">路線名稱</label>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="例：大棠樹林追蹤線"
+            className="w-full h-11 px-3 rounded-xl border border-ink/15 bg-[#fbf5e7] outline-none focus:border-forest/50 text-[13px] text-ink placeholder:text-ink-4"
+          />
+        </div>
+        <div>
+          <label className="stamp text-ink-4 block mb-1">領袖備註（隊員簡報會見到）</label>
+          <input
+            value={leaderNote}
+            onChange={e => setLeaderNote(e.target.value)}
+            placeholder="例：全程約 1.2 公里，請帶水"
+            className="w-full h-10 px-3 rounded-xl border border-ink/12 bg-[#fbf5e7] outline-none focus:border-forest/50 text-[12px] text-ink placeholder:text-ink-4"
+          />
+        </div>
+      </Card>
 
-      {/* ── 防迷路地圖：只標安全參考點，不標符號位置 ── */}
-      <div>
-        <button
-          onClick={() => setMapOpen(!mapOpen)}
-          className="w-full flex items-center justify-between py-2.5 px-4 bg-navy-800/50 rounded-xl border border-cyan/10 text-steel hover:text-ice transition-colors"
-        >
-          <span className="flex items-center gap-2 text-xs font-heading font-medium">
-            <MapIcon size={14} className="text-cyan" />
-            防迷路地圖（不標示符號）
-            {hasSafetyPoint && <span className="text-[10px] text-green">已設定安全點</span>}
-          </span>
-          <span className="flex items-center gap-2">
-            <span onClick={(e) => { e.stopPropagation(); requestGps(); }}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan/10 text-cyan text-[10px] font-heading border border-cyan/20">
-              {gpsLoading ? <Loader2 size={10} className="animate-spin" /> : <Navigation size={10} />}定位
-            </span>
-            {mapOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </span>
-        </button>
+      {/* 任務設定 */}
+      <Card className="p-3.5 space-y-3">
+        <div className="flex items-center gap-2">
+          <TimerIcon size={13} className="text-clay" />
+          <h3 className="text-[12.5px] text-ink-2">任務模式</h3>
+        </div>
 
-        <AnimatePresence>
-          {mapOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-2 space-y-2">
-                {gpsErr && <p className="text-[10px] text-red">{gpsErr}</p>}
-                <div className="relative rounded-2xl overflow-hidden border border-cyan/10" style={{ height: 220 }}>
-                  <MapContainer center={[initLat, initLng]} zoom={15} style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
-                    <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-                    {gpsLat != null && gpsLng != null && <RecenterOnce lat={gpsLat} lng={gpsLng} />}
-                    {gpsLat != null && gpsLng != null && <Marker position={[gpsLat, gpsLng]} icon={posIcon} />}
-                    {hasSafetyPoint && <Marker position={[safetyLat!, safetyLng!]} icon={safetyIcon} />}
-                    <MapClickHandler onClick={mapClick} />
-                  </MapContainer>
-                  <div className="absolute left-2 right-2 top-2 z-[1000] rounded-xl bg-navy-950/90 border border-green/20 p-2 backdrop-blur">
-                    <p className="text-[11px] text-green font-heading font-semibold flex items-center gap-1 justify-center"><ShieldCheck size={12} /> 點地圖設定集合點／安全返回點</p>
-                    <p className="text-[9px] text-steel text-center mt-0.5">隊員端只會看到安全參考，不會看到任何追蹤符號位置。</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={useGpsAsSafetyPoint} disabled={gpsLoading}
-                    className="py-2 rounded-xl bg-green/10 text-green border border-green/20 text-[10px] font-heading font-semibold disabled:opacity-50">
-                    {gpsLoading ? '定位中...' : '用目前GPS作安全點'}
-                  </button>
-                  <button type="button" onClick={() => { setSafetyLat(null); setSafetyLng(null); }}
-                    className="py-2 rounded-xl bg-navy-800 text-steel border border-steel/10 text-[10px] font-heading font-semibold">
-                    清除安全點
-                  </button>
-                </div>
-                <input value={safetyNote} onChange={e => setSafetyNote(e.target.value)} placeholder="安全點說明：例：公園入口集合 / 迷路回到此處"
-                  className="w-full px-3 py-2.5 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-xs" />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── 任務設定：計時／倒計時／觸發距離／判斷題 ── */}
-      <div className="bg-navy-800/50 rounded-2xl p-4 border border-cyan/10 space-y-4">
-        <h3 className="font-heading font-semibold text-sm text-ice-dim flex items-center gap-1.5">
-          <TimerIcon size={14} className="text-cyan" />任務模式設定
-        </h3>
-
-        {/* 計時 vs 倒計時 */}
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => setTimerMode('stopwatch')}
-            className={`p-3 rounded-xl border text-left transition-all ${timerMode === 'stopwatch'
-              ? 'bg-green/10 border-green/30' : 'bg-navy-800 border-cyan/5'}`}>
-            <TimerIcon size={16} className={timerMode === 'stopwatch' ? 'text-green' : 'text-steel'} />
-            <p className={`font-heading font-semibold text-xs mt-1 ${timerMode === 'stopwatch' ? 'text-green' : 'text-steel'}`}>⏱ 計時模式</p>
-            <p className="text-[9px] text-steel mt-0.5 leading-tight">時間向上計，挑戰最佳時間</p>
-          </button>
-          <button type="button" onClick={() => setTimerMode('countdown')}
-            className={`p-3 rounded-xl border text-left transition-all ${timerMode === 'countdown'
-              ? 'bg-red/10 border-red/30' : 'bg-navy-800 border-cyan/5'}`}>
-            <Hourglass size={16} className={timerMode === 'countdown' ? 'text-red' : 'text-steel'} />
-            <p className={`font-heading font-semibold text-xs mt-1 ${timerMode === 'countdown' ? 'text-red' : 'text-steel'}`}>⏳ 倒計時模式</p>
-            <p className="text-[9px] text-steel mt-0.5 leading-tight">限時內完成，歸零即失敗</p>
-          </button>
+          {([
+            { v: 'stopwatch' as TimerMode, label: '計時', sub: '挑戰最佳時間', icon: <TimerIcon size={14} /> },
+            { v: 'countdown' as TimerMode, label: '倒計時', sub: '歸零即失敗', icon: <Hourglass size={14} /> },
+          ]).map(o => (
+            <button
+              key={o.v}
+              onClick={() => setTimerMode(o.v)}
+              className={`press rounded-xl border p-2.5 text-left ${timerMode === o.v
+                ? 'border-forest/45 bg-forest/8' : 'border-ink/12 bg-paper-2/40'}`}
+            >
+              <span className={timerMode === o.v ? 'text-forest' : 'text-ink-4'}>{o.icon}</span>
+              <p className={`text-[12px] font-medium mt-1 ${timerMode === o.v ? 'text-forest-2' : 'text-ink-2'}`}>{o.label}</p>
+              <p className="text-[9px] text-ink-4 mt-0.5">{o.sub}</p>
+            </button>
+          ))}
         </div>
 
         {timerMode === 'countdown' && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
-            <div className="flex items-center gap-3 p-3 bg-navy-900/60 rounded-xl border border-red/15">
-              <span className="text-xs text-steel font-heading shrink-0">限時</span>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setTimeLimitMin(m => Math.max(1, m - 5))}
-                  className="w-9 h-9 rounded-full bg-navy-800 text-ice font-heading font-bold border border-cyan/10">−</button>
-                <span className="text-xl font-heading font-bold text-red w-14 text-center tabular-nums">{timeLimitMin}<span className="text-[10px] text-steel ml-0.5">分</span></span>
-                <button type="button" onClick={() => setTimeLimitMin(m => Math.min(120, m + 5))}
-                  className="w-9 h-9 rounded-full bg-navy-800 text-ice font-heading font-bold border border-cyan/10">+</button>
-              </div>
-              <div className="flex gap-1 ml-auto">
-                {[5, 10, 15, 30].map(m => (
-                  <button key={m} type="button" onClick={() => setTimeLimitMin(m)}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-heading font-bold border ${timeLimitMin === m ? 'bg-red/15 text-red border-red/30' : 'bg-navy-800 text-steel border-cyan/5'}`}>
-                    {m}分
-                  </button>
-                ))}
-              </div>
+          <div className="flex items-center gap-2 rounded-xl border border-clay/25 bg-clay/5 p-2.5">
+            <span className="text-[10px] text-ink-3">限時</span>
+            <button onClick={() => setTimeLimitMin(m => Math.max(5, m - 5))}
+              className="press w-8 h-8 rounded-full border border-ink/15 text-ink-2">−</button>
+            <span className="font-mono text-[16px] font-bold text-clay-2 w-12 text-center">{timeLimitMin}</span>
+            <button onClick={() => setTimeLimitMin(m => Math.min(180, m + 5))}
+              className="press w-8 h-8 rounded-full border border-ink/15 text-ink-2">+</button>
+            <span className="text-[10px] text-ink-3">分鐘</span>
+            <div className="ml-auto flex gap-1">
+              {[10, 15, 30].map(m => (
+                <button key={m} onClick={() => setTimeLimitMin(m)}
+                  className={`text-[9px] px-1.5 py-1 rounded border ${timeLimitMin === m ? 'border-clay/40 text-clay-2 bg-clay/10' : 'border-ink/12 text-ink-4'}`}>
+                  {m}
+                </button>
+              ))}
             </div>
-          </motion.div>
+          </div>
         )}
 
-        {/* GPS 觸發距離（實地符號） */}
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs text-steel font-heading flex items-center gap-1">
-              <MapPin size={12} className="text-cyan" />GPS 觸發距離（實地符號用）
-            </label>
-            <span className="text-cyan font-mono font-bold text-sm">{triggerDistance} 米</span>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10.5px] text-ink-3 flex items-center gap-1"><Crosshair size={11} className="text-forest" />觸發半徑</span>
+            <span className="font-mono text-[12px] text-forest font-bold">{triggerDistance} m</span>
           </div>
-          <input type="range" min={3} max={20} step={1} value={triggerDistance}
-            onChange={e => setTriggerDistance(parseInt(e.target.value, 10))}
-            className="w-full accent-cyan" />
-          <p className="text-[9px] text-steel mt-1">隊員行到符號此距離內，追蹤儀便會觸發。越小越精準（建議 5～10 米）</p>
+          <input type="range" min={3} max={25} step={1} value={triggerDistance}
+            onChange={e => setTriggerDistance(Number(e.target.value))} className="w-full" />
+          <p className="text-[9px] text-ink-4 mt-0.5">行到符號呢個距離內，隊員先可以舉機發現。建議 6–10 米。</p>
         </div>
 
-        {/* 判斷題開關 */}
-        <button type="button" onClick={() => setQuizMode(q => !q)}
-          className="w-full flex items-center justify-between p-3 bg-navy-900/60 rounded-xl border border-cyan/10">
-          <div className="text-left">
-            <p className="font-heading font-semibold text-xs text-ice flex items-center gap-1.5"><Zap size={13} className="text-gold" />符號判斷題</p>
-            <p className="text-[9px] text-steel mt-0.5">發現符號後要答對「應對行動」 — 成功運用符號先算完成</p>
-          </div>
-          <span className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${quizMode ? 'bg-green/40' : 'bg-navy-700'}`}>
-            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${quizMode ? 'left-[22px]' : 'left-0.5'}`} />
-          </span>
-        </button>
-      </div>
+        <div className="flex gap-2">
+          <Toggle label="判斷題" sub="發現後要答對應對" on={quizMode} onChange={() => setQuizMode(v => !v)} />
+          <Toggle label="AR 顯示" sub="用相機睇符號" on={arMode} onChange={() => setArMode(v => !v)} />
+        </div>
+      </Card>
 
-      {/* ── 符號列表 ── */}
+      {/* 符號序列 */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs text-steel font-heading">追蹤符號順序 ({steps.length}個)</label>
-          <button onClick={() => { setEditIdx(null); setShowPicker(true); }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green/10 text-green text-xs font-heading font-medium border border-green/20">
-            <Plus size={14} />加入符號
+        <div className="flex items-center gap-2 mb-2">
+          <h2 className="text-[13px] text-ink-2">符號序列</h2>
+          <span className="text-[9px] font-mono text-ink-4">{seqCount} 站 · {placedCount} 已錨定</span>
+          <span className="h-px flex-1 bg-ink/10" />
+          <button onClick={() => setPickerOpen(true)}
+            className="press flex items-center gap-1 h-8 px-2.5 rounded-full bg-forest text-paper text-[11px]">
+            <Plus size={13} /> 加入
           </button>
         </div>
 
         {steps.length === 0 ? (
-          <div className="bg-navy-800/40 rounded-xl p-6 text-center border border-dashed border-cyan/10">
-            <p className="text-steel text-sm">尚未加入任何符號</p>
-            <p className="text-steel text-xs mt-1">點擊「加入符號」開始建立路線</p>
+          <div className="stitch px-4 py-8 text-center">
+            <ScanLine size={22} className="text-ink-4 mx-auto mb-2" />
+            <p className="text-[12px] text-ink-2">未有符號</p>
+            <p className="text-[10px] text-ink-4 mt-1">加入第一個記號，再喺現場放置。</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {steps.map((step, i) => {
-              const s = getSignById(step.signId);
-              if (!s) return null;
-              const dirLabel = step.direction === 'left' ? '←左' : step.direction === 'right' ? '右→' : step.direction === 'forward' ? '↑前' : '';
+            {steps.map((s, i) => {
+              const sign = getSignById(s.signId);
+              if (!sign) return null;
+              const anchored = s.lat != null && s.lng != null;
               return (
-                <motion.div key={i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                  className={`bg-navy-800/60 rounded-xl p-3 border ${s.isWarning ? 'border-red/10' : 'border-cyan/8'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-heading font-bold shrink-0 ${s.isWarning ? 'bg-red/10 text-red' : 'bg-cyan/10 text-cyan'}`}>{i + 1}</div>
-                    <div className="shrink-0"><SignSVG signId={s.id} size={38} glow={false} direction={step.direction} /></div>
+                <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  className={`card px-3 py-2.5 ${s.trap ? 'border-clay/25' : ''}`}>
+                  <div className="flex items-center gap-2.5">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-[9px] shrink-0 ${
+                      s.trap ? 'bg-clay/10 text-clay-2' : 'bg-forest/10 text-forest'}`}>
+                      {s.trap ? '!' : i + 1}
+                    </span>
+                    <SignSVG signId={s.signId} size={40} glow={false} direction={s.direction} />
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-heading font-semibold text-sm text-ice flex items-center gap-1.5">
-                        {s.nameZh}
-                        {dirLabel && <span className="text-[10px] text-cyan bg-cyan/10 px-1.5 py-0.5 rounded">{dirLabel}</span>}
-                        {step.paces != null && step.paces > 0 && <span className="text-[10px] text-gold bg-gold/10 px-1.5 py-0.5 rounded">{step.paces}步</span>}
-                      </h4>
-                      {step.hiddenContent && <p className="text-[10px] text-steel truncate">📦 {step.hiddenContent}</p>}
-                      {step.lat != null && <span className="inline-flex items-center gap-0.5 text-[9px] text-green bg-green/10 px-1.5 py-0.5 rounded mr-1">📍GPS</span>}
-                      {step.trap && <span className="inline-flex items-center gap-0.5 text-[9px] text-red bg-red/10 px-1.5 py-0.5 rounded">⚠️陷阱</span>}
-                      {i === 0 && !step.trap && <span className="text-[9px] text-cyan">起點</span>}
-                      {i === steps.length - 1 && !step.trap && <span className="text-[9px] text-green">終點</span>}
+                      <p className="text-[12.5px] font-medium text-ink truncate">{sign.nameZh}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {anchored ? (
+                          <span className="text-[8.5px] px-1.5 py-0.5 rounded border border-forest/25 bg-forest/8 text-forest flex items-center gap-0.5">
+                            <MapPin size={8} /> AR · {pad3(s.bearing ?? 0)}°
+                          </span>
+                        ) : (
+                          <span className="text-[8.5px] px-1.5 py-0.5 rounded border border-clay/25 text-clay-2">未錨定</span>
+                        )}
+                        {s.paces ? <span className="text-[8.5px] px-1.5 py-0.5 rounded border border-ink/15 text-ink-3">{s.paces} 步</span> : null}
+                        {s.hiddenContent && <span className="text-[8.5px] px-1.5 py-0.5 rounded border border-ink/15 text-ink-3">📦 信物</span>}
+                        {s.trap && <span className="text-[8.5px] px-1.5 py-0.5 rounded border border-clay/30 text-clay-2">陷阱</span>}
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-0.5">
-                      <button onClick={() => moveStep(i, -1)} disabled={i === 0} className="p-1 text-steel hover:text-ice disabled:opacity-20"><MoveUp size={14} /></button>
-                      <button onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1} className="p-1 text-steel hover:text-ice disabled:opacity-20"><MoveDown size={14} /></button>
+                    <div className="flex items-center gap-0.5">
+                      <button onClick={() => setSteps(p => { const n = [...p]; if (i > 0) [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; })}
+                        className="press p-1.5 text-ink-4" aria-label="上移"><MoveUp size={13} /></button>
+                      <button onClick={() => setSteps(p => { const n = [...p]; if (i < n.length - 1) [n[i], n[i + 1]] = [n[i + 1], n[i]]; return n; })}
+                        className="press p-1.5 text-ink-4" aria-label="下移"><MoveDown size={13} /></button>
+                      <button onClick={() => openEdit(i)} className="press p-1.5 text-forest" aria-label="編輯"><Edit3 size={13} /></button>
+                      <button onClick={() => setSteps(p => p.filter((_, j) => j !== i))} className="press p-1.5 text-clay-2" aria-label="刪除"><X size={14} /></button>
                     </div>
-                    <button onClick={() => startEdit(i)} className="p-1.5 text-steel hover:text-cyan"><Edit3 size={14} /></button>
-                    <button onClick={() => removeStep(i)} className="p-1.5 text-steel hover:text-red"><X size={16} /></button>
                   </div>
                 </motion.div>
               );
@@ -407,184 +333,275 @@ const LeaderCreatePage: React.FC = () => {
         )}
       </div>
 
+      {/* 安全點 */}
+      <Card className="p-3.5 space-y-2.5">
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={13} className="text-forest" />
+          <h3 className="text-[12.5px] text-ink-2">安全集合點</h3>
+          <span className="text-[9px] text-ink-4 ml-auto">防迷路用</span>
+        </div>
+        {safety ? (
+          <div className="flex items-center justify-between rounded-lg border border-forest/25 bg-forest/6 px-2.5 py-2">
+            <span className="font-mono text-[10px] text-forest">
+              {safety.lat.toFixed(5)}, {safety.lng.toFixed(5)}
+            </span>
+            <button onClick={() => setSafety(null)} className="text-[9px] text-clay-2 border border-clay/25 rounded px-1.5 py-0.5">移除</button>
+          </div>
+        ) : (
+          <button
+            onClick={async () => {
+              setSafetyBusy(true); setError('');
+              try {
+                const p = await getCurrentPosition();
+                setSafety({ lat: p.lat, lng: p.lng });
+              } catch (e) {
+                setError(e instanceof Error ? e.message : '定位失敗');
+              } finally { setSafetyBusy(false); }
+            }}
+            disabled={safetyBusy}
+            className="press w-full h-10 rounded-xl border border-forest/25 bg-forest/6 text-forest text-[11px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+          >
+            {safetyBusy ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
+            {safetyBusy ? '定位中…' : '用目前位置作安全點'}
+          </button>
+        )}
+        <input value={safetyNote} onChange={e => setSafetyNote(e.target.value)}
+          placeholder="安全點說明：例：入口涼亭，迷路返呢度"
+          className="w-full h-9 px-2.5 rounded-lg border border-ink/12 bg-[#fbf5e7] outline-none text-[11px] placeholder:text-ink-4" />
+      </Card>
+
       {error && (
-        <div className="flex items-center gap-2 p-3 bg-red/5 border border-red/10 rounded-xl text-red text-xs">
-          <AlertCircle size={16} className="shrink-0" />{error}
+        <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/8 px-3 py-2.5 text-[11px] text-clay-2">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5" />{error}
         </div>
       )}
 
-      <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
-        <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">提示：</strong>這是追蹤，不是尋寶。地圖的作用是讓隊員知道自己在哪（防迷路）—
-          符號位置不會預先顯示，行到觸發後才標示；配合「符號判斷題」確保隊員真正讀懂符號。
-        </p>
-      </div>
+      <Btn onClick={save} disabled={saved} icon={saved ? <Check size={15} /> : undefined}>
+        {saved
+          ? '已儲存'
+          : placedCount < seqCount
+            ? '儲存並開始現場放置'
+            : existing ? '儲存變更' : '儲存路線'}
+      </Btn>
 
-      <button onClick={handleSave} disabled={!name.trim() || steps.length < 2}
-        className={`w-full py-3.5 rounded-2xl font-heading font-bold text-base transition-all ${name.trim() && steps.length >= 2
-          ? 'bg-gradient-to-r from-green/20 to-cyan/10 text-cyan border border-cyan/30 box-glow-cyan'
-          : 'bg-navy-800 text-steel/40 cursor-not-allowed border border-steel/10'}`}>
-        {existing ? '儲存變更' : '儲存並發布路線'}
-      </button>
+      {placedCount < seqCount && seqCount > 0 && (
+        <Note tone="warn">
+          仲有 {seqCount - placedCount} 個符號未錨定。未錨定嘅符號隊員會見唔到 AR 投影，只可以用文字提示。
+        </Note>
+      )}
 
-      {/* Sign Picker */}
-      <AnimatePresence>
-        {showPicker && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-            onClick={() => setShowPicker(false)}>
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={e => e.stopPropagation()}
-              className="relative bg-navy-900 rounded-3xl border border-cyan/20 p-5 w-full max-w-md max-h-[80vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-heading font-bold text-ice">選擇追蹤符號</h3>
-                <button onClick={() => setShowPicker(false)} className="p-1 text-steel hover:text-ice"><X size={20} /></button>
-              </div>
-              {cats.map(cat => (
-                <div key={cat.key} className="mb-4">
-                  <h4 className="text-xs text-steel font-heading mb-2">{cat.label}</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    {trackingSigns.filter(s => s.category === cat.key).map(sign => (
-                      <button key={sign.id} onClick={() => pickSign(sign.id)}
-                        className="flex flex-col items-center gap-1 p-2.5 bg-navy-800 rounded-xl border border-cyan/5 card-hover">
-                        <SignSVG signId={sign.id} size={48} glow={false} />
-                        <span className="text-xs font-heading font-medium text-ice">{sign.nameZh}</span>
-                        {sign.needsDirection && <span className="text-[9px] text-cyan">需選方向</span>}
-                        {sign.needsPaces && <span className="text-[9px] text-gold">需設步數</span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Config Modal */}
-      <AnimatePresence>
-        {configStep && (() => {
-          const s = getSignById(configStep.signId);
-          if (!s) return null;
-          return (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-              onClick={() => { setConfigStep(null); setEditIdx(null); }}>
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-              <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                onClick={e => e.stopPropagation()}
-                className="relative bg-navy-900 rounded-3xl border border-cyan/20 p-5 w-full max-w-sm max-h-[85vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-heading font-bold text-ice">{editIdx !== null ? '編輯符號' : '設定符號'}</h3>
-                  <button onClick={() => { setConfigStep(null); setEditIdx(null); }} className="p-1 text-steel hover:text-ice"><X size={20} /></button>
-                </div>
-
-                <div className="flex items-center gap-3 mb-4 p-3 bg-navy-800/60 rounded-xl">
-                  <SignSVG signId={s.id} size={60} glow={true} direction={s.needsDirection ? configDirection : undefined} />
-                  <div>
-                    <h4 className="font-heading font-semibold text-ice">{s.nameZh}</h4>
-                    <p className="text-[10px] text-steel">{s.action}</p>
-                  </div>
-                </div>
-
-                {s.needsDirection && (
-                  <div className="mb-4">
-                    <label className="block text-xs text-steel font-heading mb-2">箭頭指向哪個方向？</label>
-                    <div className="flex gap-2">
-                      {DIR_OPTIONS.map(opt => (
-                        <button key={opt.value}
-                          onClick={() => setConfigDirection(opt.value)}
-                          className={`flex-1 py-2.5 rounded-xl font-heading text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                            configDirection === opt.value
-                              ? 'bg-cyan/10 text-cyan border border-cyan/30'
-                              : 'bg-navy-800 text-steel border border-cyan/5'
-                          }`}>
-                          {opt.icon}{opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {s.needsPaces && (
-                  <div className="mb-4">
-                    <label className="block text-xs text-steel font-heading mb-2">步數（方格內數字）</label>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => setConfigPaces(p => Math.max(1, p - 1))}
-                        className="w-10 h-10 rounded-full bg-navy-800 text-ice font-heading font-bold text-lg border border-cyan/10">−</button>
-                      <span className="text-xl font-heading font-bold text-ice w-12 text-center">{configPaces}</span>
-                      <button onClick={() => setConfigPaces(p => p + 1)}
-                        className="w-10 h-10 rounded-full bg-navy-800 text-ice font-heading font-bold text-lg border border-cyan/10">+</button>
-                      <span className="text-xs text-steel">步</span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="mb-4">
-                  <label className="block text-xs text-steel font-heading mb-2">
-                    隱藏訊息／信物 <span className="text-[9px] text-steel">（隊員答對後顯示）</span>
-                  </label>
-                  <input
-                    value={configContent}
-                    onChange={e => setConfigContent(e.target.value)}
-                    placeholder={s.category === 'end' ? '例：恭喜完成！去涼亭找領袖領取獎章🏅' : s.needsPaces ? '例：大樹下的紅色盒子' : '例：檢查哨密碼：SKW2026'}
-                    className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 text-sm"
-                  />
-                </div>
-
-                {/* 實地 GPS 錨點：走到哪放到哪 */}
-                <div className="mb-4 p-3 bg-navy-800/60 rounded-xl border border-cyan/10">
-                  <label className="block text-xs text-steel font-heading mb-2 flex items-center gap-1">
-                    <MapPin size={12} className="text-green" />實地 GPS 錨點（可選）
-                  </label>
-                  {configAnchor ? (
-                    <div className="flex items-center justify-between p-2.5 bg-green/10 rounded-lg border border-green/20">
-                      <span className="text-[10px] text-green font-mono">
-                        📍 {configAnchor.lat.toFixed(5)}, {configAnchor.lng.toFixed(5)}
-                      </span>
-                      <button type="button" onClick={() => setConfigAnchor(null)}
-                        className="text-[10px] text-red px-2 py-1 rounded bg-red/10 border border-red/20">移除</button>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={anchorHere} disabled={gpsLoading}
-                      className="w-full py-2.5 rounded-lg bg-green/10 text-green border border-green/25 text-xs font-heading font-semibold disabled:opacity-50 flex items-center justify-center gap-1.5">
-                      {gpsLoading ? <><Loader2 size={13} className="animate-spin" />定位中…</> : <><Navigation size={13} />走到哪放到哪 — 用目前位置</>}
-                    </button>
-                  )}
-                  <p className="text-[9px] text-steel mt-1.5 leading-relaxed">
-                    加了錨點的路線為「實地追蹤」：隊員的地圖只顯示自己的位置（防迷路），
-                    行到符號附近自動觸發後才會標示在地圖上 — 下一個符號在哪不會預先顯示
-                  </p>
-                </div>
-
-                {/* 陷阱：警告類符號可設為自由觸發 */}
-                {s.isWarning && (
-                  <button type="button" onClick={() => setConfigTrap(t => !t)}
-                    className={`w-full mb-4 flex items-center justify-between p-3 rounded-xl border transition-all ${configTrap ? 'bg-red/10 border-red/30' : 'bg-navy-800/60 border-cyan/10'}`}>
-                    <div className="text-left">
-                      <p className={`font-heading font-semibold text-xs ${configTrap ? 'text-red' : 'text-steel'}`}>⚠️ 設為陷阱（自由觸發）</p>
-                      <p className="text-[9px] text-steel mt-0.5">不按順序，隊員行近即彈出警告 — 放在錯路／危險位置</p>
-                    </div>
-                    <span className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${configTrap ? 'bg-red/50' : 'bg-navy-700'}`}>
-                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${configTrap ? 'left-[22px]' : 'left-0.5'}`} />
+      {/* 符號選擇 */}
+      <Sheet open={pickerOpen} onClose={() => setPickerOpen(false)} title="選擇追蹤符號" maxH="90vh">
+        <div className="space-y-4">
+          {CATS.map(cat => (
+            <div key={cat.key}>
+              <p className="stamp text-ink-4 mb-1.5">{cat.label}</p>
+              <div className="grid grid-cols-2 gap-2">
+                {trackingSigns.filter(s => s.category === cat.key).map(s => (
+                  <button key={s.id} onClick={() => openNew(s.id)}
+                    className="press flex items-center gap-2 rounded-xl border border-ink/12 bg-[#fbf5e7] p-2 text-left">
+                    <SignSVG signId={s.id} size={38} glow={false} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[11px] text-ink truncate">{s.nameZh}</span>
+                      <span className="block text-[8.5px] text-ink-4 font-mono">{s.nameEn}</span>
                     </span>
                   </button>
-                )}
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Sheet>
 
-                <button onClick={confirmStep}
-                  className="w-full py-3 bg-cyan/10 text-cyan rounded-xl font-heading font-bold border border-cyan/20 card-hover">
-                  {editIdx !== null ? '儲存修改' : '加入路線'}
+      {/* 符號設定 */}
+      <Sheet open={!!draft} onClose={() => setDraft(null)} title={draft?.index == null ? '設定符號' : '編輯符號'}>
+        {draft && draftSign && (
+          <div className="space-y-3.5">
+            <div className="flex items-center gap-3 rounded-xl border border-ink/12 bg-[#efe4cd] p-3">
+              <SignSVG signId={draft.signId} size={64} glow={false} direction={draftSign.needsDirection ? draft.direction : undefined} />
+              <div>
+                <p className="text-[13px] font-medium text-ink">{draftSign.nameZh}</p>
+                <p className="text-[10px] text-ink-3 mt-0.5 leading-snug">{draftSign.action}</p>
+              </div>
+            </div>
+
+            {draftSign.needsDirection && (
+              <div>
+                <p className="stamp text-ink-4 mb-1">箭頭方向</p>
+                <div className="flex gap-2">
+                  {DIRS.map(d => (
+                    <button key={d.value} onClick={() => setDraft({ ...draft, direction: d.value })}
+                      className={`press flex-1 h-10 rounded-xl border text-[11px] flex items-center justify-center gap-1 ${
+                        draft.direction === d.value ? 'bg-forest text-paper border-forest' : 'border-ink/15 text-ink-3'}`}>
+                      {d.icon}{d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {draftSign.needsPaces && (
+              <div>
+                <p className="stamp text-ink-4 mb-1">步數</p>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setDraft({ ...draft, paces: Math.max(1, draft.paces - 1) })}
+                    className="press w-9 h-9 rounded-full border border-ink/15 text-ink-2">−</button>
+                  <span className="font-mono text-[16px] font-bold text-ink w-10 text-center">{draft.paces}</span>
+                  <button onClick={() => setDraft({ ...draft, paces: draft.paces + 1 })}
+                    className="press w-9 h-9 rounded-full border border-ink/15 text-ink-2">+</button>
+                  <span className="text-[10px] text-ink-4">步</span>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <p className="stamp text-ink-4 mb-1">隱藏訊息／信物（答對後顯示）</p>
+              <input value={draft.hiddenContent} onChange={e => setDraft({ ...draft, hiddenContent: e.target.value })}
+                placeholder={draftSign.category === 'end' ? '例：恭喜！去涼亭搵領袖領獎章' : '例：檢查哨密碼 SKW2026'}
+                className="w-full h-10 px-3 rounded-xl border border-ink/12 bg-[#fbf5e7] outline-none text-[11px] placeholder:text-ink-4" />
+            </div>
+
+            {draftSign.isWarning && (
+              <button onClick={() => setDraft({ ...draft, trap: !draft.trap })}
+                className={`press w-full flex items-center justify-between rounded-xl border p-2.5 ${
+                  draft.trap ? 'border-clay/35 bg-clay/8' : 'border-ink/12'}`}>
+                <span className="text-left">
+                  <span className={`block text-[11px] font-medium ${draft.trap ? 'text-clay-2' : 'text-ink-2'}`}>設為陷阱</span>
+                  <span className="block text-[9px] text-ink-4 mt-0.5">唔跟順序，行近即彈警告</span>
+                </span>
+                <span className={`w-9 h-5 rounded-full relative ${draft.trap ? 'bg-clay/60' : 'bg-ink/15'}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${draft.trap ? 'left-[18px]' : 'left-0.5'}`} />
+                </span>
+              </button>
+            )}
+
+            {/* AR 放置 */}
+            <div className={`rounded-xl border p-3 ${draft.lat != null ? 'border-forest/30 bg-forest/6' : 'border-dashed border-ink/25'}`}>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <ScanLine size={12} className="text-forest" />
+                <p className="text-[11px] font-medium text-ink-2">虛擬符號位置</p>
+              </div>
+              {draft.lat != null && draft.lng != null ? (
+                <>
+                  <p className="font-mono text-[10px] text-forest">
+                    {draft.lat.toFixed(6)}, {draft.lng.toFixed(6)}
+                  </p>
+                  <p className="text-[9px] text-ink-4 mt-0.5">
+                    方位 {pad3(draft.bearing ?? 0)}° {compassLabel(draft.bearing ?? null)}
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => setPlacing(true)} className="press flex-1 h-8 rounded-lg border border-forest/30 text-forest text-[10px]">重新放置</button>
+                    <button onClick={() => setDraft({ ...draft, lat: undefined, lng: undefined, bearing: undefined })}
+                      className="press flex-1 h-8 rounded-lg border border-ink/15 text-ink-3 text-[10px]">清除</button>
+                  </div>
+                </>
+              ) : (
+                <button onClick={() => setPlacing(true)}
+                  className="press w-full h-10 rounded-lg bg-forest text-paper text-[11px] flex items-center justify-center gap-1.5">
+                  <Crosshair size={13} /> 行到現場，開相機放置
                 </button>
-              </motion.div>
-            </motion.div>
-          );
-        })()}
+              )}
+              <p className="text-[8.5px] text-ink-4 mt-1.5 leading-relaxed">
+                隊員行到觸發半徑以內，舉機先會見到呢個符號。位置只會存喺路線 JSON 入面。
+              </p>
+            </div>
+
+            <Btn onClick={commitDraft} icon={<Check size={15} />}>
+              {draft.index == null ? '加入路線' : '儲存修改'}
+            </Btn>
+          </div>
+        )}
+      </Sheet>
+
+      {/* ── AR 放置相機 ── */}
+      {placing && draft && (
+        <CameraStage
+          cam={cam}
+          heading={pose.heading}
+          pitch={pose.pitch}
+          roll={pose.roll}
+          compass={pose.compass}
+          accuracy={pose.accuracy}
+          title={`放置「${draftSign?.nameZh ?? ''}」`}
+          subtitle={`第 ${(draft.index ?? steps.length) + 1} 站 · 站喺符號位置，手機指向隊員行過嚟嘅方向`}
+          onExit={() => { cam.stop(); setPlacing(false); }}
+          onEngage={() => { void pose.requestCompass(); }}
+          guide={{
+            title: '放置虛擬符號',
+            body: '企喺符號位置，將佢錨定落地面。',
+            steps: [
+              '企定喺要放符號嘅位置',
+              '手機指向隊員行過嚟嘅方向',
+              '按「喺呢度放低符號」',
+            ],
+          }}
+          footer={
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-hud-dim">
+                  {pose.lat != null ? `${pose.lat.toFixed(5)}, ${pose.lng!.toFixed(5)}` : '等待 GPS…'}
+                </span>
+                <span className={pose.accuracy != null && pose.accuracy > 30 ? 'text-hud-amber' : 'text-hud-green'}>
+                  {pose.accuracy != null ? `±${Math.round(pose.accuracy)}m` : '—'}
+                </span>
+              </div>
+              <button
+                onClick={dropHere}
+                disabled={pose.lat == null}
+                className="press w-full h-12 rounded-2xl bg-hud-amber text-hud font-semibold text-[14px] flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                {pose.gpsState === 'locating' ? <><Loader2 size={16} className="animate-spin" /> 等 GPS…</> : <><Crosshair size={16} /> 喺呢度放低符號</>}
+              </button>
+              <p className="text-center text-[9px] text-hud-dim">
+                方位 {pad3(pose.heading ?? 0)}° {compassLabel(pose.heading)} · 符號畫喺地面 · 隊員要停低對準先見到
+              </p>
+            </div>
+          }
+        >
+          <div className="absolute inset-0 pointer-events-none">
+            <ArSign
+              signId={draft.signId}
+              xPct={previewProjection.xPct}
+              yPct={previewProjection.yPct}
+              scale={1}
+              dist={2}
+              label="預覽"
+              scanning
+            />
+          </div>
+        </CameraStage>
+      )}
+
+      {/* 放置成功閃光 */}
+      <AnimatePresence>
+        {flash && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] pointer-events-none bg-[#f2c14e]/20"
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="px-5 py-3 rounded-2xl bg-hud/90 border border-hud-green/50 text-hud-green font-mono text-[11px] tracking-widest">
+                ✓ 已錨定
+              </div>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );
 };
+
+const Toggle: React.FC<{ label: string; sub: string; on: boolean; onChange: () => void }> = ({ label, sub, on, onChange }) => (
+  <button onClick={onChange}
+    className={`press flex-1 flex items-center justify-between rounded-xl border p-2.5 text-left ${on ? 'border-forest/35 bg-forest/6' : 'border-ink/12'}`}>
+    <span>
+      <span className={`block text-[11px] font-medium ${on ? 'text-forest-2' : 'text-ink-3'}`}>{label}</span>
+      <span className="block text-[8.5px] text-ink-4 mt-0.5">{sub}</span>
+    </span>
+    <span className={`w-8 h-4.5 rounded-full relative shrink-0 ${on ? 'bg-forest/60' : 'bg-ink/15'}`} style={{ height: 18 }}>
+      <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white transition-all ${on ? 'left-[16px]' : 'left-0.5'}`} />
+    </span>
+  </button>
+);
 
 export default LeaderCreatePage;

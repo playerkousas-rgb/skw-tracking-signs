@@ -8,13 +8,4 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true, // 允許沙盒／預覽網域存取（手機預覽友善）
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          leaflet: ['leaflet', 'react-leaflet'],
-        },
-      },
-    },
-  },
 })
