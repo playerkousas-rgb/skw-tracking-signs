@@ -1,0 +1,21 @@
+{
+  "name": "SKW 追蹤符號 · AR 追蹤訓練",
+  "short_name": "SKW 追蹤",
+  "description": "領袖在實地放下虛擬追蹤符號，隊員行到現場舉機，透過相機 AR 先見到符號。",
+  "lang": "zh-HK",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4ebd9",
+  "theme_color": "#2c4a34",
+  "categories": ["education", "outdoors", "sports"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

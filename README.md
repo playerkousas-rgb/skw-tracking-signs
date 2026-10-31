@@ -1,213 +1,270 @@
-# SKW 追蹤符號追蹤訓練 APP
+# SKW 追蹤符號 · 虛擬符號 AR 追蹤
 
 **COPYRIGHT © 2026 SCOUT SYSTEM · SKW TRACKING**
 
-合併三個版本所長（取長補短）的手機友善童軍追蹤符號訓練工具。
+手機優先的童軍追蹤訓練工具。**符號唔喺地上 —— 係領袖喺現場放低嘅虛擬記號，隊員行到、舉機，先會透過相機見到。**
 
-> 🐾 **這是追蹤（Tracking），不是尋寶** —
-> 地圖只讓隊員知道**自己在哪**（防止迷路）；下一個符號在哪**不會預先顯示**，
-> 要靠隊員沿途觀察地面追蹤符號，**行到觸發**後才會標示在地圖上。
+> 🐾 **這是追蹤（Tracking），不是尋寶**
+> 隊員全程唔會預先見到下一個符號嘅位置、距離或方向。
+> 只有行到觸發半徑、舉起手機望向正確方向，虛擬符號先會喺相機畫面浮現。
 
-## 版本合併：取長補短
+---
 
-| 來源 | 取其所長 |
+## 操作流程：領袖點「畫」、成員點「讀」
+
+### 領袖（放置虛擬符號）
+
+| 步 | 做乜 | 畫面 |
+|---|---|---|
+| 1 | 喺「設計路線」排好符號序列（10 種標準童軍符號，唔使手畫） | 每張符號卡都有**實物畫法**：用幾多根樹枝、點排 |
+| 2 | 儲存 → 自動進入 **`/leader/place/:trailId` 現場放置模式** | 進度條 + 「第 2 / 5 站」 |
+| 3 | 行到該站，企定，撳「開相機放置」 | HUD 顯示 GPS 精度、方位、地面預覽 |
+| 4 | 手機指向隊員行過嚟嘅方向，撳「喺呢度放低符號」 | 自動記錄 `lat / lng / bearing`，跳去下一站 |
+
+> 領袖**唔需要畫圖**：符號形狀係標準化嘅；領袖做嘅係「行去邊、放邊個符號、面向邊個方向」。
+> 「實物畫法」係教學參考（如果同時想擺實物符號，照住排就得），亦保證虛擬符號同童軍教材一致。
+
+### 成員（讀取地面符號）
+
+| 步 | 做乜 | 畫面 |
+|---|---|---|
+| 1 | 匯入 JSON／掃 QR | 任務簡報：站數、AR 錨定數、陷阱數 |
+| 2 | 跟住上一個符號嘅指示行 | 只有文字指示，冇地圖、冇距離、冇方向 |
+| 3 | 入到觸發半徑 → 撳「舉機觀察」 | 相機 HUD + 羅盤帶 |
+| 4 | **俯低手機、望住地面、慢慢左右掃** | 見到好淡嘅粉筆虛線輪廓 |
+| 5 | 保持對準 | 輪廓實體化 → 掃描環填滿 → 自動讀取 |
+| 6 | 答對「正確應對」 | 顯示隱藏訊息，繼續下一站 |
+
+## 核心玩法（v6）
+
+| 角色 | 做乜 |
 |---|---|
-| `skw-tracking-signs` | 10 種官方追蹤符號圖鑑（天然材料 SVG 畫風）、符號判斷題、路線分享（QR／代碼）、防迷路安全點 |
-| `skw-tracking-signs2` | GPS 接近觸發符號、「走到哪放到哪」實地放置、音效提示、觸發半徑設定 |
-| `skw_tracking_signs`（v5.2 HTML） | 廣東話語音導航、陷阱符號自由觸發、GPS 準確度警告、震動提示 |
+| **領袖** | 排好符號序列 → 行一次路線 → 喺每個位置開相機「放低」虛擬符號（記 GPS＋方位）→ 匯出 JSON／QR |
+| **隊員** | 匯入路線 → 跟住上一個記號嘅指示行 → 入到觸發半徑 → 舉機 → 符號浮現 → 答對「正確應對」→ 繼續 |
 
-## 核心玩法：成功運用追蹤符號完成任務
+1. **虛擬符號，實地錨定** — 符號存在於 GPS 座標，冇實物、冇預先提示
+2. **相機係眼睛** — 用方位／俯仰／距離投影到相機畫面，似現場全息投影
+3. **AR 鎖定** — 要將中央準星對準符號約 0.85 秒，先「鎖定」讀取
+4. **判斷題** — 發現符號後要答對「應對行動」，答對先算成功運用
+5. **陷阱符號** — 警告類記號可設為陷阱，行近即彈全螢幕警告
+6. **計時／倒計時** — 可設限時，完成後記錄用時同最佳時間 🏅
 
-1. **領袖**建立任務：按順序排符號（可設箭頭方向、步數、隱藏信物）
-2. 有 GPS 錨點的符號 → **實地追蹤**：走到哪放到哪，隊員行近自動觸發
-3. 警告類符號可設為**陷阱** — 不按順序，行近即彈出警告（錯路／危險／分岔）
-4. 隊員發現符號後要答對「**應對行動**」— 答對才算成功運用符號
-5. 跟隨指示前進，直到「已回家」🎯
+---
 
-## 🗺 定位地圖的設計原則（防迷路 ≠ 尋寶）
+## 📷 相機多維功能
 
-| 顯示 ✅ | 不顯示 ❌ |
+| 功能 | 狀態 | 說明 |
+|---|---|---|
+| 虛擬符號 AR 投影 | ✅ | 方位 + 俯仰 + 距離 → 畫面座標，唔用 WebXR，iOS Safari 都用得 |
+| 相機放置符號 | ✅ | 領袖企喺現場，HUD 顯示 GPS 精度／方位，一按錨定 |
+| 指南針帶 + 方位角 | ✅ | 頂部 5° 刻度羅盤帶，中央紅色準線 |
+| 水平儀 | ✅ | 十字準星下方氣泡，綠色＝水平 |
+| 電筒 | ✅ 部分裝置 | 有 `torch` capability 先顯示按鈕（iOS Safari 多數唔支援） |
+| 變焦 | ✅ 部分裝置 | 讀 `zoom` capability，冇就唔顯示 |
+| 夜視 | ✅ | CSS 濾鏡（降飽和、提亮、色相偏移） |
+| QR 掃描 | ✅ | 原生 `BarcodeDetector`，唔支援就用 `jsQR` |
+| 模擬視野 | ✅ | 冇鏡頭／拒絕權限時仍然可以示範同測試 |
+
+**私隱**：所有影像只喺本機處理，唔會上傳、唔會儲存影片。
+
+### 半 VR：要「望住塊地」先算找到
+
+童軍追蹤符號係**畫喺地面**嘅。所以虛擬符號一律錨定喺地面（`heightM = 0`），並用透視壓扁 + 接觸陰影，令佢似貼喺泥地而唔係浮喺半空。
+
+隊員唔係行到就自動見到：
+
+1. 進入觸發半徑（可設 3–25 m）先會出現「舉機觀察」按鈕
+2. 開鏡頭後，符號只會喺**正確方位**出現（唔會提示你轉左定轉右）
+3. 中央準星要同時滿足：水平方位差 **< 8°**、垂直偏差 **< 18%** 畫面高
+4. 保持對準，符號會**由粉筆痕逐漸實體化** —— 唔係一彈就出
+5. 掃描環填滿（約 1.3 秒）→「已鎖定」→ 再保持 0.95 秒自動讀取
+6. 一移開視線，浮現度會快速倒退（0.45 秒內歸零）
+
+### 為什麼「不停跑」唔會觸發？
+
+| 防護 | 實作 |
 |---|---|
-| 你的即時位置（脈衝點＋準確度圈，防迷路） | 下一個符號在哪（**絕不**預先顯示） |
-| 已觸發的符號（走過的痕跡，金框＝最新） | 距離／方向提示（沒有冷熱感應，那是尋寶） |
-| 走過的路線（虛線麵包屑） | |
-| 安全集合點 SAFE | |
+| 唔會自動開鏡頭 | 必須手動按「舉機觀察」 |
+| 跑緊唔計掃描 | 讀 GPS `coords.speed`，> 1.2 m/s 時掃描進度只會倒退 |
+| 掃描要對準 | 水平 8° + 垂直 18% 雙軸容差 |
+| 要望住塊地 | 地面符號投影在地平線以下，唔望向地面就對唔到 |
+| 一閃即過唔算 | 浮現度要維持約 1.3 秒，跑過只會見到一下粉筆痕 |
+| 走開會消失 | 進度 < 0.35 自動解除鎖定 |
 
-- 符號**行到觸發距離內才會出現在地圖上** — 玩家要自己沿途觀察地面找到為止
-- 雷達式「接近提示」已刻意移除：訊號強弱會令追蹤變質成尋寶熱冷遊戲
+### AR 投影原理（`src/lib/geo.ts`）
 
-## 📡 GPS 準確度加強
+```
+橫向：relBearing = 目標方位 − 裝置朝向
+      x% = 50 + relBearing / (hFov/2) × 50
 
-- `enableHighAccuracy` ＋ `maximumAge: 0`（絕不用舊快取定位）＋ 短逾時重試
-- **準確度門檻**：誤差 > 30m 的定位只更新地圖，不用作符號觸發判決（防誤觸）
-- GPS 品質即時顯示：優（≤10m）／良（≤20m）／可（≤30m）／弱（>30m 警告閃爍）
-- 地圖如實畫出誤差圈，讓隊員知道自己定位的可信度
+縱向：仰角 = −atan(眼高 / 距離)      （地面點永遠喺地平線以下）
+      y% = 50 − (仰角 − 相機俯仰) / (vFov/2) × 50
 
-## ⏱ 計時及倒計時模式（新）
+大小：scale = 4.2 / 距離（clamp 0.42–2.1）
+```
 
-| 模式 | 說明 |
-|---|---|
-| **⏱ 計時模式** | 時間向上計，完成後記錄用時，可挑戰路線**最佳時間** 🏅 |
-| **⏳ 倒計時模式** | 領袖設定限時（分鐘）；時間歸零任務即失敗。最後 60 秒語音警告，最後 10 秒滴答提示 |
+- 眼高預設 1.5 m、橫向視角預設 62°、直向比例 1.78
+- 裝置朝向：iOS 用 `webkitCompassHeading`，Android 用 `deviceorientationabsolute` 嘅 alpha
+- 冇指南針時會退化為「符號置中」，並提供手動確認，唔會卡死
 
-- 任務簡報顯示模式與最佳時間
-- 完成畫面顯示用時、符號判斷成績、是否新最佳時間
-- 領袖路線列表顯示 🏅 最佳時間紀錄
+---
 
-## 📱 手機友善設計
+## 🗂 JSON 分享
 
-- 底部導覽列、大按鈕（≥44px 觸控目標）、safe-area 劉海支援
-- 定位地圖自動跟隨移動，拖動即停跟隨；一鍵「回到我的位置」📱
-- 網頁震動提示（`navigator.vibrate`）、Web Audio 音效（無需檔案）
-- 廣東話語音導航（`speechSynthesis` zh-HK，可開關 🔊／🔇）
-- GPS 訊號微弱時閃爍警告（準確度 > 25m）
-- 全部資料存 localStorage（離線可用），72 小時自動清除
+領袖可以：
+
+- 掃／貼／開檔案匯入
+- 複製完整 JSON
+- 下載 `.json` 檔
+- 用系統分享（Web Share API，支援檔案就直接分享 JSON）
+- 產生 QR（內含壓縮後嘅路線連結）
+
+格式（節錄）：
+
+```json
+{
+  "app": "skw-tracking-signs",
+  "v": 6,
+  "id": "SKW-OAK24",
+  "name": "大棠樹林追蹤線",
+  "settings": {
+    "triggerDistance": 8,
+    "timerMode": "countdown",
+    "timeLimitMin": 20,
+    "quizMode": true,
+    "arMode": true
+  },
+  "steps": [
+    { "signId": 1, "direction": "right", "lat": 22.4231, "lng": 114.0192, "bearing": 78 },
+    { "signId": 9, "paces": 12, "hiddenContent": "大樹下紅色盒", "lat": 22.4236, "lng": 114.0197, "bearing": 92 },
+    { "signId": 4, "lat": 22.4244, "lng": 114.0205, "bearing": 60 }
+  ]
+}
+```
+
+> ⚠️ JSON 內含符號 GPS 座標，只應分享俾自己隊員。
+
+---
 
 ## 頁面
 
-| 頁面 | 功能 |
+| 頁面 | 內容 |
 |---|---|
-| 首頁 | 模式總覽、追蹤 ≠ 看地圖提示 |
-| 符號圖鑑 | 10 種符號：分類、搜尋、意思及應對動作 |
-| 設計任務 | 領袖建路線：符號順序＋GPS 錨點＋陷阱＋計時模式＋觸發距離＋安全點 |
-| 沿途追蹤 | 輸入代碼／掃 QR → 任務簡報 → 追蹤儀 → 完成成績 |
+| `/` 營地 | 玩法總覽、三件工具、追蹤≠尋寶原則 |
+| `/learn` 圖鑑 | 10 種官方符號、分類／搜尋、意思＋正確應對 |
+| `/leader` 領袖 | 路線列表、分享（QR／JSON／連結）、成績統計 |
+| `/leader/create` 設計 | 符號序列、任務設定、安全點（儲存後直入放置模式） |
+| `/leader/place/:id` 放置 | **逐站現場放置**：進度條、實物畫法、GPS／方位、放低即跳下一站 |
+| `/player` 追蹤 | 掃 QR／貼 JSON／開檔案匯入路線 |
+| `/play/:trailId` 任務 | 簡報 → 追蹤 → 相機觀測 → 判斷題 → 成績 |
+
+---
+
+## 📱 手機設計
+
+- 紙張質感 + 森林綠 + 營火橙的「野外筆記」視覺，深色只用喺相機 HUD
+- 底部四鍵導覽、≥44px 觸控目標、`viewport-fit=cover` ＋ safe-area
+- PWA manifest：可「加到主畫面」，直向鎖定
+- 震動（`navigator.vibrate`）＋ Web Audio 音效（無檔案）＋ 廣東話語音導航
+- 全部資料存 `localStorage`，72 小時自動清除
+
+---
 
 ## 技術棧
 
 - React 19 + TypeScript + Vite 7
 - Tailwind CSS v4、Framer Motion、Lucide Icons
-- Leaflet（**只**用於領袖端設定安全點 — 隊員端全程無地圖）
-- qrcode（路線分享）
-
-## 本地開發
+- `qrcode`（產生 QR）、`jsqr`（QR 解碼後備）
+- 無 3D／AR 引擎、無地圖依賴 — AR 用純數學投影
 
 ```bash
 npm install
 npm run dev
 ```
 
-## 構建與驗證
+### 構建與驗證
 
 ```bash
-npm run build      # tsc -b && vite build（產出 dist/）
-npm run typecheck  # 只做 TypeScript 型別檢查
+npm run build      # tsc -b && vite build
+npm run typecheck  # 只做型別檢查
 npm run lint       # ESLint
-npm run check      # 型別檢查 + ESLint 一次過
+npm run check      # 兩樣一齊
 ```
 
-## 部署到 Vercel
-
-1. Fork 或 Clone 此項目到你的 GitHub
-2. 在 Vercel 中導入 GitHub 項目
-3. 自動部署完成（`vercel.json` 已固定設定，無需手動填寫）
-
-### 部署設定說明
-
-| 檔案 | 作用 |
-|---|---|
-| `vercel.json` | 固定 `installCommand: npm ci`、`buildCommand: npm run build`、`outputDirectory: dist`；`rewrites` 把深連結導回 `index.html`（本專案用 `BrowserRouter`，缺了它 `/leader`、`/play/:trailId` 重新整理會 404） |
-| `.vercelignore` | CLI 部署（`vercel deploy`）時不上傳：`node_modules`、`dist`、建置快取、`*.bak`/`*.tmp`/`*.old`/`*.log`、`uploads/`、環境檔 |
-| `.gitignore` | Git 整合部署時同樣排除上述項目，`dist/` **不入版本控制**（由遠端建置產生） |
-
-> ⚠️ 改任何設定前，先讀下面「🧹 防增肥守則」。
+**注意**：相機同指南針需要 **HTTPS**（或 localhost）。用 Vercel 部署即自動有 HTTPS；區網 IP 測試會攞唔到鏡頭。
 
 ---
 
-## 🧹 防增肥守則（改版前必讀，勿刪）
+## 部署到 Vercel
 
-> 本專案曾把 `dist/` commit 進 git，光這一項就佔掉全部追蹤內容的 **67.5%（754.8 KB）**。
-> 2026-09 已清理（commit `9a399ef`）：追蹤內容由 **37 檔 / 1,118.7 KB** 降到 **31 檔 / 307.2 KB（−72.5%）**。
-> 那是當時的數字，**現在的即時數字請用第 5 節的指令自己跑**。
-> 以下是防止復胖的硬性規則。**新增目錄、新增套件、新增素材之前，先對照這張表。**
+1. Fork / Clone 到 GitHub
+2. Vercel 匯入項目，自動部署（`vercel.json` 已固定設定）
+
+| 檔案 | 作用 |
+|---|---|
+| `vercel.json` | `installCommand: npm ci`、`buildCommand: npm run build`、`outputDirectory: dist`；`rewrites` 把深連結導回 `index.html`（BrowserRouter 必需） |
+| `.vercelignore` | CLI 部署唔上傳 `node_modules`、`dist`、快取、`*.bak` 等 |
+| `.gitignore` | Git 部署同樣排除；`dist/` **不入版本控制** |
+
+---
+
+## 🧹 防增肥守則（改版前必讀）
 
 ### 1. 絕對不准 commit 的東西
 
 | 項目 | 為什麼 | 由誰把關 |
 |---|---|---|
-| `dist/` | 建置產物，Vercel 遠端會自己 `npm run build` 產生；commit 等於同一份內容存兩次 | `.gitignore` |
-| `node_modules/` | 本機 200 MB，Vercel 用 `npm ci` 自行安裝 | `.gitignore` + `.vercelignore` |
+| `dist/` | 建置產物，Vercel 遠端自己 build | `.gitignore` |
+| `node_modules/` | 本機 200 MB | `.gitignore` + `.vercelignore` |
 | `*.bak` `*.tmp` `*.old` `*.orig` `*.log` | 開發過程死重 | `.gitignore` + `.vercelignore` |
 | `uploads/` `tmp/` `temp/` | 測試上傳資料 | `.gitignore` + `.vercelignore` |
 | `.env` `.env.*` `*.local` | 環境檔（含機密） | `.gitignore` + `.vercelignore` |
 | `.DS_Store` `*.tsbuildinfo` `.vite/` `.cache/` | 系統／快取殘留 | `.gitignore` + `.vercelignore` |
 
-**新增任何工具或產物目錄時，`.gitignore` 與 `.vercelignore` 要「兩個都加」**
-（前者管 Git 整合部署，後者管 `vercel deploy` CLI 上傳，缺一條就會漏）。
+**新增任何工具或產物目錄時，`.gitignore` 與 `.vercelignore` 要「兩個都加」。**
 
 ### 2. `dependencies` vs `devDependencies`
 
-- `dependencies` **只放瀏覽器執行期真的會 import 的套件**。目前僅 8 個：
-  `react`、`react-dom`、`react-router-dom`、`framer-motion`、`lucide-react`、`leaflet`、`react-leaflet`、`qrcode`。
-- **建置工具一律放 `devDependencies`**：`vite`、`@vitejs/plugin-react`、`tailwindcss`、`@tailwindcss/vite`、`typescript`、`eslint*`、以及所有 `@types/*`。
-- 新裝套件前先問三句：
-  1. 執行期真的需要嗎？（純建置用 → `devDependencies`）
-  2. 現有套件能不能做到？（例：圖示已有 `lucide-react`，不要再裝第二套 icon 庫）
-  3. 體積多少？（`npm i` 後看 `du -sh node_modules`，以及 build 後的 `dist/assets/*.js` gzip 大小）
-- 裝完執行 `npm run build`，把新的 gzip 數字記進 PR 描述，體積明顯上升要說明原因。
+- `dependencies` 只放瀏覽器執行期真的會 import 的套件。目前 8 個：
+  `react`、`react-dom`、`react-router-dom`、`framer-motion`、`lucide-react`、`qrcode`、`jsqr`、`@vercel/analytics`。
+- 建置工具一律 `devDependencies`。
+- 新套件前三問：執行期真的需要？現有套件做到？體積幾多？
 
 ### 3. 靜態素材
 
-- `public/` 下每個檔案都要**能在 code 裡 grep 到引用**，否則就是死重。
-  檢查方式：`grep -rn "檔名" src/ index.html`。
-- 大圖（截圖、設計原稿、展示圖）**不要進 repo**，放外部圖床或 issue 附件。
-- 素材用完即刪，不要「先留著」。
+- `public/` 每個檔案都要 grep 到引用（`icon.svg`、`manifest.webmanifest` 喺 `index.html` 引用）。
+- 大圖唔入 repo。
 
-### 4. ⚠️ Tailwind v4 的 `.gitignore` 陷阱（踩過，別再踩）
+### 4. ⚠️ Tailwind v4 的 `.gitignore` 陷阱
 
-**Tailwind v4 的自動來源掃描會遵守 `.gitignore`。**
-以前 `dist/` 沒被忽略，Tailwind 把舊建置產物當原始碼掃，多吐了 11 個沒在用的
-utility（`container`、`sticky`、`italic`、`ring`…），CSS 虛胖 1.36 kB。
-反過來說：**如果你把某個含 class 的檔案加進 `.gitignore`，Tailwind 就不會再掃描它**，
-樣式可能無聲消失。改 `.gitignore` 後務必 `npm run build` 並比對 CSS 大小。
+Tailwind v4 自動來源掃描會遵守 `.gitignore`。把含 class 嘅檔案加進 `.gitignore`，樣式會無聲消失。改完請 `npm run build` 比較 CSS 大小。
 
-### 4b. ⚠️ `vercel.json` 的鍵名陷阱（踩過，別再踩）
+### 5. ⚠️ `vercel.json` 鍵名陷阱
 
-Vercel 的 `vercel.json` schema 頂層是 **`"additionalProperties": false`** ——
-**寫錯一個鍵名，整個部署會「立即失敗」**（約 20 秒就報錯，連 build 都不會跑），
-而且 GitHub 上只顯示 `Deployment has failed`，看不到原因。
+`vercel.json` 頂層 `additionalProperties: false` —— 錯一個鍵名整個部署即刻 fail。目前只用：
+`$schema`、`framework`、`installCommand`、`buildCommand`、`outputDirectory`、`rewrites`。
 
-2026-09 實際踩到：加了 `"cleanDistPath": true`（那是 Dashboard 的設定項，不是
-`vercel.json` 的合法鍵）→ PR 的 Vercel check 直接 fail。移除該鍵後部署即恢復成功。
-
-規則：
-
-- `vercel.json` **只放確定合法的鍵**。目前只用這 6 個：
-  `$schema`、`framework`、`installCommand`、`buildCommand`、`outputDirectory`、`rewrites`。
-- 想加新鍵，先去 <https://openapi.vercel.sh/vercel.json> 確認該鍵存在，別憑印象寫。
-- **改完 `vercel.json` 一定要看 PR 上的 Vercel check 是否 `pass`**，本地 `npm run build`
-  通過**不代表** Vercel 設定合法。
-- Dashboard 的 Build Settings 會覆寫 `vercel.json`，兩邊要一致。
-
-### 5. 合併前檢查清單（複製這一段到 PR 描述逐項打勾）
+### 6. 合併前檢查清單
 
 ```
-[ ] git status 乾淨，且 git ls-files 沒有 dist/、node_modules/、*.bak、*.log、uploads/
-[ ] git ls-files | wc -l 與追蹤內容大小沒有無理由上升
-[ ] 新增套件已確認歸類正確（建置工具在 devDependencies）
-[ ] public/ 新增的每個檔案都能在 src/ 或 index.html grep 到引用
-[ ] npm ci 成功（Vercel 用的就是這條）
-[ ] npm run build 通過（exit 0）
-[ ] npm run check 通過，或新增的 error 已在 PR 說明
-[ ] 新增的目錄已同時加入 .gitignore 與 .vercelignore
-[ ] PR 的 Vercel check 顯示 pass（改了 vercel.json / .vercelignore 必查）
-[ ] 部署後實測深連結：/leader、/play/:trailId 重新整理不會 404
+[ ] git status 乾淨；git ls-files 冇 dist/、node_modules/、*.bak、*.log
+[ ] 新增套件歸類正確
+[ ] public/ 新檔案都 grep 到引用
+[ ] npm ci 成功
+[ ] npm run build 通過
+[ ] npm run check 通過（或新增 error 已說明）
+[ ] 新目錄已同時加入 .gitignore 同 .vercelignore
+[ ] PR 的 Vercel check pass
+[ ] 部署後實測深連結：/leader、/play/:trailId 重新整理不 404
+[ ] 手機實測：相機權限、指南針、AR 鎖定、QR 掃描
 ```
 
-一行版自查：
+### 7. 已知事項
 
-```bash
-git ls-files -z | xargs -0 stat -c '%s' | awk '{s+=$1;n++} END {printf "%d files, %.1f KB\n", n, s/1024}'
-git ls-files | grep -E '^(dist/|node_modules/)|\.(bak|tmp|old|log)$' && echo '❌ 有死重' || echo '✅ 無死重'
-```
-
-### 6. 尚未解決、已知的事
-
-- `.git/` 內仍留著舊 `dist/` 的歷史 blob（約 540 KB）。停止追蹤只保證**未來**的
-  checkout 與上傳包乾淨；要回收歷史體積需 `git filter-repo` 改寫歷史 + force push，
-  屬破壞性操作，需另行決議。
-- `npm run lint` 目前有 **6 個既有 error**（`react-hooks` 系列 5 個、`no-unused-vars` 1 個），
-  位於 `Confetti.tsx`、`SignSVG.tsx`、`LeaderCreatePage.tsx`、`PlayerPage.tsx`、`TrailWalkPage.tsx`。
-  這些是清理之前就存在的，修它們會動到執行期 effect 邏輯，尚未處理。
+- `dist/assets/*.js` 主 chunk 約 78 KB gzip；頁面已用 `React.lazy` 分割。
+- ESLint 0 error、5 個 warning，全部係 `react-hooks/set-state-in-effect`（GPS／指南針／陷阱偵測同步屬刻意設計）。
+- ⚠️ 真機相機／指南針／電筒未能喺本機沙盒驗證（冇鏡頭），已用模擬視野同 SSR 煙霧測試覆蓋其餘流程。
+- 舊 v5 路線會自動遷移到 `skw_trails_v6`（保留座標，新增 `bearing` 留空）。
 
 ---
 

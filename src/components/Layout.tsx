@@ -1,57 +1,52 @@
 import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, BookOpen, PenTool, Compass } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { BookOpen, Compass, PenTool, Map } from 'lucide-react';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
+const items = [
+  { path: '/', icon: Map, label: '營地' },
+  { path: '/learn', icon: BookOpen, label: '圖鑑' },
+  { path: '/leader', icon: PenTool, label: '領袖' },
+  { path: '/player', icon: Compass, label: '追蹤' },
+];
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const nav = useNavigate();
   const loc = useLocation();
 
-  const items = [
-    { path: '/', icon: Home, label: '首頁' },
-    { path: '/learn', icon: BookOpen, label: '符號' },
-    { path: '/leader', icon: PenTool, label: '建立' },
-    { path: '/player', icon: Compass, label: '追蹤' },
-  ];
-
-  const isActive = (path: string) => {
-    if (path === '/') return loc.pathname === '/';
-    return loc.pathname.startsWith(path);
-  };
+  const isActive = (path: string) =>
+    path === '/' ? loc.pathname === '/' : loc.pathname.startsWith(path);
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#02133E' }}>
-      <main className="flex-1 overflow-y-auto pb-20">
-        <div className="max-w-lg mx-auto px-4 pt-4 pb-8">
-          {children}
-        </div>
+    <div className="min-h-screen paper-grain flex flex-col">
+      <div className="h-safe-top" />
+      <main className="flex-1 pb-[76px]">
+        <div className="mx-auto w-full max-w-[520px] px-4 pt-3">{children}</div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-navy-900/95 backdrop-blur-lg border-t border-cyan/10 pb-safe">
-        <div className="max-w-lg mx-auto flex items-center justify-around px-2 py-1.5">
-          {items.map(({ path, icon: Icon, label }) => {
-            const active = isActive(path);
-            return (
-              <button
-                key={path}
-                onClick={() => nav(path)}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all min-w-0 ${
-                  active ? 'text-cyan' : 'text-steel hover:text-ice-dim'
-                }`}
-              >
-                <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
-                <span className={`text-[10px] font-heading font-medium ${active ? 'glow-cyan' : ''}`}>
-                  {label}
-                </span>
-                {active && (
-                  <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-cyan rounded-full" />
-                )}
-              </button>
-            );
-          })}
+      <nav className="fixed bottom-0 inset-x-0 z-50">
+        <div className="mx-auto max-w-[520px] px-3 pb-safe">
+          <div className="mb-2 flex items-center justify-around rounded-[22px] border border-ink/15 bg-[#f8f1e1]/95 backdrop-blur-md shadow-[0_10px_30px_-16px_rgba(38,33,26,0.55)] px-1.5 py-1.5">
+            {items.map(({ path, icon: Icon, label }) => {
+              const active = isActive(path);
+              return (
+                <button
+                  key={path}
+                  onClick={() => nav(path)}
+                  className={`press relative flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-1.5 transition-colors ${
+                    active ? 'text-forest' : 'text-ink-4'
+                  }`}
+                >
+                  {active && (
+                    <span className="absolute inset-0 rounded-2xl bg-forest/10" />
+                  )}
+                  <Icon size={19} strokeWidth={active ? 2.4 : 1.7} className="relative" />
+                  <span className={`relative text-[9.5px] tracking-wide ${active ? 'font-semibold' : ''}`}>
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
     </div>

@@ -1,197 +1,150 @@
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, ArrowRight, AlertTriangle, Info, Flag } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Search, ArrowUp, ArrowLeft, ArrowRight, BookOpen } from 'lucide-react';
 import SignSVG from '../components/SignSVG';
-import { trackingSigns, getSignsByCategory } from '../data/trackingSigns';
+import { trackingSigns, getSignById, TrackingSign } from '../data/trackingSigns';
+import { Chip, Empty, PageHeader, Sheet } from '../components/ui';
 
-const categoryLabels: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  direction: { label: '方向指示', icon: <ArrowRight size={14} />, color: 'text-cyan bg-cyan/10 border-cyan/20' },
-  warning: { label: '警告標記', icon: <AlertTriangle size={14} />, color: 'text-red bg-red/10 border-red/20' },
-  info: { label: '資訊提示', icon: <Info size={14} />, color: 'text-gold bg-gold/10 border-gold/20' },
-  end: { label: '結束標記', icon: <Flag size={14} />, color: 'text-green bg-green/10 border-green/20' },
+const CATS: { key: 'all' | TrackingSign['category']; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'direction', label: '方向' },
+  { key: 'warning', label: '警告' },
+  { key: 'info', label: '資訊' },
+  { key: 'end', label: '結束' },
+];
+
+const catTone: Record<TrackingSign['category'], string> = {
+  direction: 'border-forest/25 bg-forest/8 text-forest',
+  warning: 'border-clay/30 bg-clay/8 text-clay-2',
+  info: 'border-gold/30 bg-gold/8 text-gold',
+  end: 'border-ink/20 bg-ink/5 text-ink-2',
 };
 
 const LearnPage: React.FC = () => {
-  const [query, setQuery] = useState('');
-  const [activeCat, setActiveCat] = useState<string | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [cat, setCat] = useState<'all' | TrackingSign['category']>('all');
+  const [q, setQ] = useState('');
+  const [openId, setOpenId] = useState<number | null>(null);
 
-  const filtered = useMemo(() => {
-    let signs = trackingSigns;
-    if (activeCat) {
-      signs = getSignsByCategory(activeCat as 'direction' | 'warning' | 'info' | 'end');
-    }
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      signs = signs.filter(s =>
-        s.nameZh.includes(q) || s.nameEn.toLowerCase().includes(q) || s.description.includes(q)
-      );
-    }
-    return signs;
-  }, [query, activeCat]);
+  const list = useMemo(() => {
+    const key = q.trim().toLowerCase();
+    return trackingSigns.filter(s => {
+      const inCat = cat === 'all' || s.category === cat;
+      const inQ = !key || s.nameZh.includes(key) || s.nameEn.toLowerCase().includes(key) || s.action.includes(key);
+      return inCat && inQ;
+    });
+  }, [cat, q]);
 
-  const categories = ['direction', 'warning', 'info', 'end'] as const;
+  const active = openId != null ? getSignById(openId) : null;
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-1">
-        <h1 className="text-xl font-heading font-bold text-ice">符號圖鑑</h1>
-        <span className="text-xs text-steel bg-navy-800 px-2 py-0.5 rounded-full">
-          {trackingSigns.length} 種符號
-        </span>
-      </div>
+    <div className="space-y-3.5 pb-4">
+      <PageHeader
+        kicker="FIELD GUIDE"
+        title="追蹤符號圖鑑"
+        sub="十種童軍標準記號 — 每一種都有一個「正確應對」，唔止係睇得明。"
+        right={
+          <span className="shrink-0 mt-1 flex items-center gap-1 text-[10px] text-ink-3 border border-ink/15 rounded-full px-2 py-1">
+            <BookOpen size={11} /> {trackingSigns.length}
+          </span>
+        }
+      />
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-steel" />
+      <div className="flex items-center gap-2 rounded-2xl border border-ink/15 bg-[#faf3e3]/80 px-3 h-11">
+        <Search size={15} className="text-ink-4 shrink-0" />
         <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="搜尋符號名稱..."
-          className="w-full pl-9 pr-4 py-2.5 bg-navy-800/70 rounded-xl border border-cyan/8 text-sm text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 transition-colors"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder="搜尋符號、意思或應對動作…"
+          className="flex-1 bg-transparent outline-none text-[12px] placeholder:text-ink-4 text-ink"
         />
-        {query && (
-          <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-steel hover:text-ice">
-            <X size={14} />
-          </button>
+        {q && (
+          <button onClick={() => setQ('')} className="text-[10px] text-ink-4 px-1">清除</button>
         )}
       </div>
 
-      {/* Category filter pills */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
-        <button
-          onClick={() => setActiveCat(null)}
-          className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-heading font-medium transition-all ${
-            activeCat === null
-              ? 'bg-ice/10 text-ice border border-ice/20'
-              : 'bg-navy-800 text-steel border border-transparent'
-          }`}
-        >
-          全部
-        </button>
-        {categories.map(cat => {
-          const cl = categoryLabels[cat];
-          return (
-            <button
-              key={cat}
-              onClick={() => setActiveCat(activeCat === cat ? null : cat)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-heading font-medium border transition-all flex items-center gap-1.5 ${
-                activeCat === cat ? cl.color : 'bg-navy-800 text-steel border-transparent'
-              }`}
-            >
-              {cl.icon}
-              {cl.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Sign Grid */}
-      <div className="grid grid-cols-2 gap-2.5">
-        {filtered.map((sign, i) => (
-          <motion.button
-            key={sign.id}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-            onClick={() => setSelected(selected === sign.id ? null : sign.id)}
-            className={`bg-navy-800/60 rounded-xl p-3 border text-left card-hover transition-all ${
-              selected === sign.id
-                ? 'border-cyan/30 box-glow-cyan'
-                : 'border-cyan/5'
-            }`}
-          >
-            <div className="flex items-center gap-2 mb-1.5">
-              <SignSVG signId={sign.id} size={44} glow={false} />
-              <div className="min-w-0">
-                <h3 className="font-heading font-semibold text-sm text-ice truncate">{sign.nameZh}</h3>
-                <p className="text-[10px] text-steel">{sign.nameEn}</p>
-              </div>
-            </div>
-            {sign.isWarning && (
-              <span className="inline-block text-[9px] text-red bg-red/10 px-1.5 py-0.5 rounded">
-                警告
-              </span>
-            )}
-          </motion.button>
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4 pb-0.5">
+        {CATS.map(c => (
+          <Chip key={c.key} active={cat === c.key} onClick={() => setCat(c.key)}>
+            {c.label}
+          </Chip>
         ))}
-        {filtered.length === 0 && (
-          <div className="col-span-2 text-center py-10 text-steel text-sm">
-            找不到相關符號
-          </div>
-        )}
       </div>
 
-      {/* Detail Modal */}
-      <AnimatePresence>
-        {selected !== null && (() => {
-          const sign = trackingSigns.find(s => s.id === selected);
-          if (!sign) return null;
-          const cl = categoryLabels[sign.category];
-          return (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-              onClick={() => setSelected(null)}
+      {list.length === 0 ? (
+        <Empty icon={<Search size={20} />} title="搵唔到相關符號" sub="試下其他關鍵字，或者切換分類。" />
+      ) : (
+        <div className="grid grid-cols-2 gap-2.5">
+          {list.map((s, i) => (
+            <motion.button
+              key={s.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(i * 0.035, 0.28) }}
+              onClick={() => setOpenId(s.id)}
+              className="press card px-2.5 pt-3 pb-2.5 flex flex-col items-center text-left relative overflow-hidden"
             >
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-              <motion.div
-                initial={{ y: 60, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 60, opacity: 0 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                onClick={e => e.stopPropagation()}
-                className="relative bg-navy-900 rounded-3xl border border-cyan/20 p-6 w-full max-w-sm max-h-[85vh] overflow-y-auto box-glow-cyan"
-              >
-                <button
-                  onClick={() => setSelected(null)}
-                  className="absolute top-3 right-3 p-2 text-steel hover:text-ice transition-colors"
-                >
-                  <X size={18} />
-                </button>
+              <span className={`absolute right-2 top-2 font-mono text-[8px] px-1 py-0.5 rounded border ${catTone[s.category]}`}>
+                {s.id.toString().padStart(2, '0')}
+              </span>
+              <SignSVG signId={s.id} size={74} glow={false} />
+              <p className="text-[12px] font-medium text-ink mt-1.5">{s.nameZh}</p>
+              <p className="text-[9px] text-ink-4 font-mono tracking-wide">{s.nameEn}</p>
+              <p className="text-[9.5px] text-ink-3 mt-1 leading-snug line-clamp-2 text-center">{s.action}</p>
+            </motion.button>
+          ))}
+        </div>
+      )}
 
-                <div className="flex flex-col items-center text-center mb-4">
-                  <SignSVG signId={sign.id} size={120} className="mb-3" />
-                  <h2 className="text-xl font-heading font-bold text-ice glow-cyan">{sign.nameZh}</h2>
-                  <p className="text-steel text-sm">{sign.nameEn}</p>
-                  <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border ${cl.color}`}>
-                    {cl.icon}
-                    {cl.label}
-                  </span>
-                </div>
+      <Sheet open={!!active} onClose={() => setOpenId(null)} title={active?.nameZh}>
+        {active && (
+          <div className="space-y-4">
+            <div className="relative flex items-center justify-center rounded-2xl border border-ink/12 bg-[#efe4cd] py-5 overflow-hidden">
+              <div className="absolute inset-0 opacity-40"
+                style={{ backgroundImage: 'radial-gradient(circle at 30% 60%, rgba(120,95,60,.25) 0 1px, transparent 1px)', backgroundSize: '18px 18px' }} />
+              <SignSVG signId={active.id} size={150} glow />
+            </div>
 
-                <div className="space-y-3 text-sm">
-                  <div className="bg-navy-800/70 rounded-xl p-3 border border-cyan/5">
-                    <p className="text-steel-light leading-relaxed">{sign.description}</p>
-                  </div>
-                  <div className="bg-cyan/5 rounded-xl p-3 border border-cyan/10">
-                    <p className="text-cyan text-xs font-heading font-semibold mb-1">看到此符號時：</p>
-                    <p className="text-ice leading-relaxed">{sign.action}</p>
-                  </div>
-                  {sign.isWarning && (
-                    <div className="bg-red/5 rounded-xl p-3 border border-red/10 flex items-start gap-2">
-                      <AlertTriangle size={16} className="text-red mt-0.5 shrink-0" />
-                      <p className="text-red text-xs leading-relaxed">這是警告符號 — 看到後應立即採取相應行動，確保安全。</p>
-                    </div>
+            <div className="flex items-center gap-2">
+              <span className={`font-mono text-[9px] px-2 py-1 rounded border ${catTone[active.category]}`}>
+                {CATS.find(c => c.key === active.category)?.label}
+              </span>
+              <span className="text-[10px] text-ink-4 font-mono tracking-wide">{active.nameEn}</span>
+              {active.isWarning && <span className="text-[9px] text-clay-2 border border-clay/30 rounded px-1.5 py-0.5">警告</span>}
+            </div>
+
+            <div>
+              <p className="stamp text-ink-4 mb-1">意思</p>
+              <p className="text-[12px] text-ink-2 leading-relaxed">{active.description}</p>
+            </div>
+
+            <div className="rounded-xl border border-ink/15 bg-[#efe4cd]/70 p-3">
+              <p className="stamp text-clay mb-1">實物畫法</p>
+              <p className="text-[12px] text-ink-2 leading-relaxed">{active.layout}</p>
+            </div>
+
+            <div className="rounded-xl border border-forest/25 bg-forest/6 p-3">
+              <p className="stamp text-forest mb-1">正確應對</p>
+              <p className="text-[12.5px] text-forest-2 font-medium leading-relaxed">{active.action}</p>
+            </div>
+
+            {(active.needsDirection || active.needsPaces) && (
+              <div className="rounded-xl border border-ink/12 bg-paper-2/50 p-3">
+                <p className="stamp text-ink-4 mb-1.5">放置時要設定</p>
+                <div className="flex gap-2">
+                  {active.needsDirection && (
+                    <span className="flex items-center gap-1 text-[10px] text-ink-2 border border-ink/15 rounded-full px-2 py-1">
+                      <ArrowLeft size={10} /><ArrowUp size={10} /><ArrowRight size={10} /> 箭頭方向
+                    </span>
+                  )}
+                  {active.needsPaces && (
+                    <span className="text-[10px] text-ink-2 border border-ink/15 rounded-full px-2 py-1">步數 1–20</span>
                   )}
                 </div>
-
-                <button
-                  onClick={() => setSelected(null)}
-                  className="w-full mt-4 py-2.5 bg-cyan/10 text-cyan border border-cyan/20 rounded-xl font-heading font-semibold text-sm"
-                >
-                  關閉
-                </button>
-              </motion.div>
-            </motion.div>
-          );
-        })()}
-      </AnimatePresence>
-
-      <p className="text-center text-[9px] text-steel pt-3 tracking-widest">COPYRIGHT © 2026 SCOUT SYSTEM</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 };

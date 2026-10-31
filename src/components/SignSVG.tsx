@@ -12,12 +12,10 @@ const WOOD = '#8B6914';
 const WOOD_DARK = '#6B4F12';
 const STONE = '#9E9E9E';
 const STONE_DARK = '#757575';
-const GROUND = '#3D2B1F';
+const GROUND = '#2A2118';
 
 const SignSVG: React.FC<SignSVGProps> = ({ signId, size = 140, className = '', glow = true, direction }) => {
   const s = size;
-  const pad = s * 0.15;
-  const inner = s - pad * 2;
   if (direction) {
     // 有方向時縮小主符號，旁邊放箭頭
     const mainSize = s * 0.7;
@@ -73,7 +71,7 @@ const DirectionArrow: React.FC<{ direction: 'forward' | 'left' | 'right'; size: 
       <defs>
         <filter id={filterId} x="-40%" y="-40%" width="180%" height="180%">
           <feGaussianBlur stdDeviation="2.5" result="blur" />
-          <feFlood floodColor="#00d4ff" floodOpacity="0.3" result="color" />
+          <feFlood floodColor="#f2c14e" floodOpacity="0.45" result="color" />
           <feComposite in="color" in2="blur" operator="in" result="shadow" />
           <feMerge>
             <feMergeNode in="shadow" />
@@ -128,7 +126,7 @@ const SignContent: React.FC<{ signId: number; size: number; glow: boolean }> = (
     <defs>
       <filter id={filterId} x="-30%" y="-30%" width="160%" height="160%">
         <feGaussianBlur stdDeviation="3" result="blur" />
-        <feFlood floodColor="#00d4ff" floodOpacity="0.25" result="color" />
+        <feFlood floodColor="#f2c14e" floodOpacity="0.38" result="color" />
         <feComposite in="color" in2="blur" operator="in" result="shadow" />
         <feMerge>
           <feMergeNode in="shadow" />
@@ -160,7 +158,9 @@ const SignContent: React.FC<{ signId: number; size: number; glow: boolean }> = (
         const stones = [];
         for (let i = 0; i < count; i++) {
           const a = (i / count) * Math.PI * 2 - Math.PI / 2;
-          stones.push(renderStone(cx + Math.cos(a) * r, cy + Math.sin(a) * r, inner * 0.08));
+          stones.push(
+            <g key={i}>{renderStone(cx + Math.cos(a) * r, cy + Math.sin(a) * r, inner * 0.08)}</g>
+          );
         }
         return <>{ground}{stones}{renderStone(cx, cy, inner * 0.1)}</>;
       }
@@ -171,7 +171,9 @@ const SignContent: React.FC<{ signId: number; size: number; glow: boolean }> = (
         const parts = [];
         for (let i = 0; i < pts - 1; i++) {
           const t1 = i / (pts - 1), t2 = (i + 1) / (pts - 1);
-          parts.push(renderStick(cx - w / 2 + t1 * w, cy + Math.sin(t1 * Math.PI * 3) * h, cx - w / 2 + t2 * w, cy + Math.sin(t2 * Math.PI * 3) * h));
+          parts.push(
+            <g key={i}>{renderStick(cx - w / 2 + t1 * w, cy + Math.sin(t1 * Math.PI * 3) * h, cx - w / 2 + t2 * w, cy + Math.sin(t2 * Math.PI * 3) * h)}</g>
+          );
         }
         return <>{ground}{parts}</>;
       }

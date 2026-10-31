@@ -1,99 +1,151 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   SKW TRACKING · 設計語言 v6
+   戶外童軍「野外筆記」質感：紙張、墨線、森林綠、營火橙
+   相機 AR 層則用深色 HUD（夜間／強光下都睇得清）
+   ───────────────────────────────────────────────────────────── */
+
 @theme {
-  --color-navy-950: #02133E;
-  --color-navy-900: #051a4a;
-  --color-navy-800: #082256;
-  --color-navy-700: #0c2e6b;
-  --color-navy-600: #123b80;
+  /* 紙張 */
+  --color-paper: #f4ebd9;
+  --color-paper-2: #ede1c9;
+  --color-paper-3: #e2d3b6;
+  --color-paper-4: #d5c2a0;
 
-  --color-cyan: #00d4ff;
-  --color-cyan-dim: #0a4a6b;
-  --color-cyan-dark: #063348;
+  /* 墨 */
+  --color-ink: #26211a;
+  --color-ink-2: #4a4133;
+  --color-ink-3: #6f6350;
+  --color-ink-4: #9a8b72;
 
-  --color-green: #00ff88;
-  --color-green-dim: #0a5c3a;
-  --color-green-dark: #063d28;
+  /* 森林 */
+  --color-forest: #2c4a34;
+  --color-forest-2: #1d3123;
+  --color-moss: #6e8b57;
+  --color-moss-2: #93a87c;
 
-  --color-red: #ff3366;
-  --color-gold: #ffd700;
-  --color-orange: #ff8c00;
+  /* 營火／印泥 */
+  --color-clay: #b4552d;
+  --color-clay-2: #8f3f1f;
+  --color-gold: #a8791f;
+  --color-gold-2: #d0a33c;
 
-  --color-ice: #e0f0ff;
-  --color-ice-dim: #7ba8cc;
-  --color-steel: #3a5068;
-  --color-steel-light: #5a7a98;
+  /* 相機 HUD */
+  --color-hud: #0d120e;
+  --color-hud-2: #16201a;
+  --color-hud-ink: #ece0c2;
+  --color-hud-dim: #9aa88f;
+  --color-hud-green: #8fe38b;
+  --color-hud-amber: #f2c14e;
+  --color-hud-red: #ff6b57;
 
-  --font-heading: 'Fredoka', sans-serif;
-  --font-body: 'Noto Sans TC', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+  --font-heading: 'Noto Serif TC', 'Songti TC', serif;
+  --font-body: 'Noto Sans TC', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --radius-xl2: 1.25rem;
 }
 
 * { -webkit-tap-highlight-color: transparent; }
 
-html, body, #root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
+html, body, #root { height: 100%; margin: 0; padding: 0; }
 
 body {
   font-family: var(--font-body);
-  background: #02133E;
-  color: var(--color-ice);
-  overflow-x: hidden;
+  color: var(--color-ink);
+  background-color: var(--color-paper);
+  overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  font-weight: 700;
 }
 
-/* Glow effects */
-.glow-cyan { text-shadow: 0 0 10px rgba(0,212,255,0.5), 0 0 30px rgba(0,212,255,0.15); }
-.glow-green { text-shadow: 0 0 10px rgba(0,255,136,0.5), 0 0 30px rgba(0,255,136,0.15); }
-.glow-gold { text-shadow: 0 0 10px rgba(255,215,0,0.5), 0 0 30px rgba(255,215,0,0.15); }
-.glow-red { text-shadow: 0 0 10px rgba(255,51,102,0.5), 0 0 30px rgba(255,51,102,0.15); }
-
-.box-glow-cyan { box-shadow: 0 0 20px rgba(0,212,255,0.12), inset 0 0 20px rgba(0,212,255,0.04); }
-.box-glow-green { box-shadow: 0 0 20px rgba(0,255,136,0.12), inset 0 0 20px rgba(0,255,136,0.04); }
-.box-glow-gold { box-shadow: 0 0 20px rgba(255,215,0,0.12), inset 0 0 20px rgba(255,215,0,0.04); }
-
-/* Grid background */
-.grid-bg {
+/* 紙紋：多層極淡漸層模擬纖維，唔加圖檔 */
+.paper-grain {
+  background-color: var(--color-paper);
   background-image:
-    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+    radial-gradient(circle at 15% 20%, rgba(160,130,80,0.055) 0 1.4px, transparent 1.5px),
+    radial-gradient(circle at 72% 64%, rgba(120,95,60,0.05) 0 1.2px, transparent 1.3px),
+    radial-gradient(circle at 40% 88%, rgba(160,130,80,0.04) 0 1px, transparent 1.1px),
+    linear-gradient(115deg, rgba(255,255,255,0.5), transparent 45%),
+    linear-gradient(0deg, rgba(180,150,100,0.10), transparent 30%);
+  background-size: 37px 41px, 53px 47px, 29px 31px, 100% 100%, 100% 100%;
 }
 
-/* Animations */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+/* 卡片：紙片 + 微翹邊 */
+.card {
+  background: linear-gradient(178deg, #fbf5e7 0%, #f3e9d5 58%, #ecdfc6 100%);
+  border: 1px solid rgba(74, 65, 51, 0.16);
+  border-radius: 18px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.85) inset,
+    0 10px 22px -16px rgba(38,33,26,0.55),
+    0 2px 4px -2px rgba(38,33,26,0.14);
 }
-.animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
 
-@keyframes pulse-ring {
-  0% { transform: scale(0.8); opacity: 0.6; }
-  100% { transform: scale(2.5); opacity: 0; }
+.card-flat {
+  background: rgba(251, 245, 231, 0.72);
+  border: 1px solid rgba(74, 65, 51, 0.14);
+  border-radius: 16px;
 }
-.animate-pulse-ring { animation: pulse-ring 2s ease-out infinite; }
 
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+.stitch {
+  border: 1.5px dashed rgba(74, 65, 51, 0.28);
+  border-radius: 14px;
 }
-.animate-blink { animation: blink 1.5s ease-in-out infinite; }
 
-@keyframes sign-reveal {
-  0% { transform: scale(0.2); opacity: 0; filter: blur(30px) brightness(3); }
-  60% { transform: scale(1.12); opacity: 1; filter: blur(0) brightness(1.3); }
-  100% { transform: scale(1); opacity: 1; filter: blur(0) brightness(1); }
+/* 印章式小標籤 */
+.stamp {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 9px;
+  padding: 3px 7px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  opacity: 0.9;
 }
-.animate-sign-reveal { animation: sign-reveal 0.7s ease-out forwards; }
+
+/* 觸感按鈕 */
+.press { transition: transform .12s ease, box-shadow .12s ease, background-color .15s ease; }
+.press:active { transform: scale(0.972); }
+
+/* 分隔線：手繪感 */
+.rule {
+  height: 1px;
+  background-image: linear-gradient(90deg, rgba(74,65,51,0.30) 0 6px, transparent 6px 10px);
+  background-size: 10px 1px;
+}
+
+/* ── 安全區 ── */
+.pt-safe { padding-top: max(env(safe-area-inset-top, 0px), 0px); }
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px); }
+.h-safe-top { height: env(safe-area-inset-top, 0px); }
+
+/* ── 動效 ── */
+@keyframes fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+.anim-up { animation: fade-up .42s cubic-bezier(.22,.9,.3,1) both; }
+
+@keyframes breathe { 0%,100% { opacity:.55; transform: scale(.94); } 50% { opacity:1; transform: scale(1.06); } }
+.anim-breathe { animation: breathe 2.6s ease-in-out infinite; }
+
+@keyframes sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.anim-sweep { animation: sweep 2.4s linear infinite; }
+
+@keyframes scan-y { 0% { top: 8%; opacity: 0; } 10% { opacity: .9; } 90% { opacity: .9; } 100% { top: 92%; opacity: 0; } }
+.anim-scan { animation: scan-y 2.8s ease-in-out infinite; }
+
+@keyframes lock-flash { 0% { opacity: 0; transform: scale(1.5); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
+.anim-lock { animation: lock-flash .65s ease-out forwards; }
+
+@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.anim-ticker { animation: ticker 26s linear infinite; }
 
 @keyframes confetti-fall {
   0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
@@ -101,65 +153,56 @@ h1, h2, h3, h4, h5, h6 {
 }
 .confetti-piece { animation: confetti-fall 3s ease-in forwards; }
 
-@keyframes shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
+@keyframes rise { from { opacity: 0; transform: translateY(30px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.anim-rise { animation: rise .38s cubic-bezier(.2,.9,.3,1) both; }
+
+/* ── 相機 HUD ── */
+.hud-frame {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(143,227,139,0.06), transparent 60%),
+    linear-gradient(180deg, rgba(13,18,14,0.55), rgba(13,18,14,0.15) 40%, rgba(13,18,14,0.55));
 }
-.animate-shimmer {
-  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.1), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite;
+.hud-scanlines {
+  background-image: repeating-linear-gradient(180deg, rgba(236,224,194,0.045) 0 1px, transparent 1px 3px);
 }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.3); }
+.hud-corner {
+  width: 26px; height: 26px;
+  border-color: rgba(236,224,194,0.55);
 }
-
-/* Card interactions */
-.card-hover { transition: transform 0.15s ease, box-shadow 0.15s ease; }
-.card-hover:active { transform: scale(0.97); }
-@media (hover: hover) {
-  .card-hover:hover { transform: translateY(-2px); }
-}
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-cyan-dim); border-radius: 2px; }
-
-/* Smooth scrolling */
-html { scroll-behavior: smooth; }
-
-/* Safe area for mobile */
-.pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
-
-/* ── 追蹤儀雷達（取自 v5.2 雷達概念）── */
-@keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.radar-sweep {
-  background: conic-gradient(from 0deg, rgba(0, 212, 255, 0.30), rgba(0, 212, 255, 0.05) 55deg, transparent 70deg);
-  animation: radar-sweep 2.8s linear infinite;
-  border-radius: 9999px;
+.hud-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-hud-dim);
 }
 
-/* GPS 訊號微弱警告（取自 v5.2） */
-@keyframes warn-flash {
-  0%, 100% { background: rgba(255, 51, 102, 0.18); }
-  50% { background: rgba(255, 51, 102, 0.40); }
+/* 投影出來的虛擬符號 */
+.vsign {
+  filter: drop-shadow(0 0 18px rgba(242,193,78,0.55)) drop-shadow(0 6px 16px rgba(0,0,0,0.55));
 }
-.gps-warning { animation: warn-flash 1s infinite; }
 
-/* 倒計時最後倒數 — 紅色閃爍 */
-@keyframes timer-danger {
-  0%, 100% { border-color: rgba(255, 51, 102, 0.55); box-shadow: 0 0 14px rgba(255, 51, 102, 0.10); }
-  50% { border-color: rgba(255, 51, 102, 1); box-shadow: 0 0 22px rgba(255, 51, 102, 0.30); }
-}
-.timer-danger { animation: timer-danger 0.55s infinite; }
+/* 夜視模式 */
+.night-vision { filter: saturate(0.25) contrast(1.18) brightness(1.22) hue-rotate(65deg); }
+.night-vision::after { content: ''; }
 
-/* ── Leaflet overrides (light tiles, visible) ── */
+/* 隱藏捲軸但可滾 */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(74,65,51,0.25); border-radius: 4px; }
+
+/* range 滑桿：童軍綠 */
+input[type='range'] { accent-color: var(--color-forest); }
+
+/* leaflet 淺色地圖 */
 .leaflet-container {
-  background: #e8e4df !important;
+  background: #e7ddc7 !important;
   font-family: var(--font-body) !important;
 }
 .leaflet-control-zoom { display: none !important; }
 .leaflet-control-attribution { display: none !important; }
+
+/* 避免 iOS 輸入框自動放大 */
+input, textarea, select { font-size: 16px; }

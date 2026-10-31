@@ -4,7 +4,7 @@ interface ConfettiProps {
   pieces?: number;
 }
 
-const colors = ['#00d4ff', '#00ff88', '#ffd700', '#ff3366', '#0a4a6b', '#ff8c00', '#7ba8cc'];
+const colors = ['#2c4a34', '#6e8b57', '#a8791f', '#b4552d', '#d0a33c', '#93a87c', '#f2c14e'];
 
 const Confetti: React.FC<ConfettiProps> = ({ pieces = 40 }) => {
   const [parts, setParts] = useState<{
@@ -32,7 +32,7 @@ const Confetti: React.FC<ConfettiProps> = ({ pieces = 40 }) => {
   }, [pieces]);
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
+    <div className="fixed inset-0 pointer-events-none z-[120] overflow-hidden">
       {parts.map(p => (
         <div
           key={p.id}

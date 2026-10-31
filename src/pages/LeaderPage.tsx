@@ -1,158 +1,201 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Share2, Check, Footprints, ArrowRight, QrCode, X, Copy, Link as LinkIcon, Download } from 'lucide-react';
+import { motion } from 'framer-motion';
+import {
+  Plus, Trash2, Share2, Copy, QrCode, Download, Link2, Footprints, ArrowRight, Crosshair,
+  FileJson, Trophy, AlertTriangle, Users,
+} from 'lucide-react';
 import QRCode from 'qrcode';
-import { getAllTrails, deleteTrail, encodeTrail, getBestTimeMs, formatDuration, isFieldTrail, trapSteps, Trail } from '../lib/trailStore';
+import {
+  getAllTrails, deleteTrail, encodeTrail, getBestTimeMs, formatDuration,
+  trailToJson, trailFileName, trailSummary, getAllResults, Trail,
+} from '../lib/trailStore';
 import SignSVG from '../components/SignSVG';
-import { getSignById } from '../data/trackingSigns';
+import { Btn, Empty, Note, PageHeader, Sheet, Stat } from '../components/ui';
 
 const LeaderPage: React.FC = () => {
   const nav = useNavigate();
   const [trails, setTrails] = useState<Trail[]>(getAllTrails());
-  const [copiedTag, setCopiedTag] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [shareTrail, setShareTrail] = useState<Trail | null>(null);
-  const [shareCode, setShareCode] = useState('');
-  const [shareLink, setShareLink] = useState('');
-  const [qrDataUrl, setQrDataUrl] = useState('');
-  const [shareErr, setShareErr] = useState('');
+  const [qr, setQr] = useState('');
+  const [qrErr, setQrErr] = useState('');
+  const [copied, setCopied] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const results = getAllResults();
 
   const refresh = () => setTrails(getAllTrails());
 
-  const copyText = async (text: string, tag: string) => {
+  const copy = async (text: string, tag: string) => {
     try { await navigator.clipboard.writeText(text); } catch {
       const ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
     }
-    setCopiedTag(tag);
-    setTimeout(() => setCopiedTag(''), 2000);
-  };
-
-  const handleDelete = (id: string) => { deleteTrail(id); refresh(); setConfirmDelete(null); };
-
-  const handleCopy = async (trail: Trail) => {
-    await copyText(encodeTrail(trail), `code-${trail.id}`);
+    setCopied(tag);
+    window.setTimeout(() => setCopied(''), 1800);
   };
 
   const openShare = async (trail: Trail) => {
-    const code = encodeTrail(trail);
-    const url = `${window.location.origin}/player?code=${encodeURIComponent(code)}`;
     setShareTrail(trail);
-    setShareCode(code);
-    setShareLink(url);
-    setQrDataUrl('');
-    setShareErr('');
+    setQr('');
+    setQrErr('');
     try {
-      const dataUrl = await QRCode.toDataURL(url, {
-        errorCorrectionLevel: 'M',
-        margin: 2,
-        width: 260,
-        color: { dark: '#02133E', light: '#FFFFFF' },
+      const url = `${window.location.origin}/player?code=${encodeURIComponent(encodeTrail(trail))}`;
+      const data = await QRCode.toDataURL(url, {
+        errorCorrectionLevel: 'M', margin: 1, width: 420,
+        color: { dark: '#26211a', light: '#fbf5e7' },
       });
-      setQrDataUrl(dataUrl);
-    } catch (e) {
-      console.error(e);
-      setShareErr('QR Code 產生失敗，請改用複製連結或代碼。');
+      setQr(data);
+    } catch {
+      setQr('');
+      setQrErr('路線太長，QR 產生失敗 — 請改用「複製 JSON」或下載 JSON 檔。');
     }
   };
 
-  const downloadQr = () => {
-    if (!qrDataUrl || !shareTrail) return;
+  const downloadJson = (trail: Trail) => {
+    const blob = new Blob([trailToJson(trail)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = qrDataUrl;
-    a.download = `${shareTrail.id}-qr.png`;
+    a.href = url;
+    a.download = trailFileName(trail);
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 mb-1">
-        <h1 className="text-xl font-heading font-bold text-ice">設計路線</h1>
-        <span className="text-xs text-steel bg-navy-800 px-2 py-0.5 rounded-full">{trails.length} 條</span>
-      </div>
-      <p className="text-xs text-steel -mt-2 mb-1">設定符號順序 + 箭頭方向 + 隱藏信物，分享代碼或 QR Code 給隊員沿途追蹤</p>
+  const shareFile = async (trail: Trail) => {
+    const file = new File([trailToJson(trail)], trailFileName(trail), { type: 'application/json' });
+    const nav2 = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+    if (navigator.share && nav2.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: trail.name }); return; } catch { /* cancelled */ }
+    }
+    downloadJson(trail);
+  };
 
-      <button onClick={() => nav('/leader/create')}
-        className="w-full bg-gradient-to-r from-green-dark to-navy-800 text-ice rounded-2xl p-4 flex items-center gap-4 border border-green/20 box-glow-green card-hover">
-        <div className="w-12 h-12 rounded-xl bg-green/10 flex items-center justify-center"><Plus size={22} className="text-green" /></div>
-        <div className="flex-1 text-left">
-          <h3 className="font-heading font-semibold text-base text-green glow-green">建立新路線</h3>
-          <p className="text-steel text-xs">自訂符號順序、箭頭方向、隱藏信物、防迷路安全點</p>
+  const shareLink = (trail: Trail) =>
+    `${window.location.origin}/player?code=${encodeURIComponent(encodeTrail(trail))}`;
+
+  return (
+    <div className="space-y-3.5 pb-4">
+      <PageHeader
+        kicker="LEADER MODE"
+        title="領袖路線"
+        sub="先行一次，喺現場用相機放低虛擬符號，再將路線以 JSON／QR 交俾隊員。"
+        right={
+          <span className="shrink-0 mt-1 flex items-center gap-1 text-[10px] text-ink-3 border border-ink/15 rounded-full px-2 py-1">
+            <Footprints size={11} /> {trails.length} 條
+          </span>
+        }
+      />
+
+      <button
+        onClick={() => nav('/leader/create')}
+        className="press w-full relative overflow-hidden rounded-[20px] bg-forest text-paper p-4 text-left border border-forest-2 shadow-[0_14px_28px_-18px_rgba(29,49,35,1)]"
+      >
+        <div className="absolute right-0 top-0 bottom-0 w-28 opacity-20"
+          style={{ background: 'radial-gradient(circle at 80% 30%, #f2c14e, transparent 65%)' }} />
+        <div className="flex items-center gap-3">
+          <span className="w-11 h-11 rounded-2xl border border-hud-amber/40 bg-hud-amber/10 flex items-center justify-center">
+            <Plus size={20} className="text-hud-amber" />
+          </span>
+          <div className="flex-1">
+            <p className="font-heading text-[15px]">建立新路線</p>
+            <p className="text-[10px] text-paper/65 mt-0.5">排符號 · 現場放置 · 觸發距離 · 計時</p>
+          </div>
+          <ArrowRight size={17} className="text-paper/70" />
         </div>
-        <ArrowRight size={20} className="text-green" />
       </button>
 
-      <h2 className="font-heading font-semibold text-sm text-ice-dim pt-2">已建立路線</h2>
+      <div className="flex gap-2">
+        <div className="card-flat flex-1 px-3 py-2.5 flex items-center gap-3">
+          <Stat value={results.filter(r => r.success).length} label="成功完成" tone="text-forest" />
+          <span className="w-px h-6 bg-ink/10" />
+          <Stat value={trails.reduce((n, t) => n + trailSummary(t).ar, 0)} label="已錨定符號" tone="text-clay" />
+          <span className="w-px h-6 bg-ink/10" />
+          <Stat value={new Set(results.map(r => r.playerName)).size} label="參加隊員" tone="text-gold" />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-0.5">
+        <h2 className="text-[13px] text-ink-2">我的路線</h2>
+        <span className="h-px flex-1 bg-ink/10" />
+      </div>
 
       {trails.length === 0 ? (
-        <div className="text-center py-10">
-          <Footprints size={40} className="text-steel mx-auto mb-3 opacity-50" />
-          <p className="text-steel text-sm">尚未建立任何路線</p>
-          <p className="text-steel text-xs mt-1">點擊上方按鈕建立第一條追蹤路線</p>
-        </div>
+        <Empty
+          icon={<Footprints size={20} />}
+          title="仲未有路線"
+          sub="建立第一條路線：排好符號，然後行一次現場放低虛擬記號。"
+        />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {trails.map((trail, i) => {
+            const sum = trailSummary(trail);
+            const best = getBestTimeMs(trail.id);
             return (
-              <motion.div key={trail.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                className="bg-navy-800/60 rounded-2xl border border-cyan/8 overflow-hidden">
-                <div className="p-3 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-cyan/10 flex items-center justify-center shrink-0"><Footprints size={18} className="text-cyan" /></div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-heading font-semibold text-sm text-ice truncate">{trail.name}</h3>
-                    <p className="text-[10px] text-steel flex flex-wrap items-center gap-x-1.5">
-                      <span>{isFieldTrail(trail) ? '📍實地' : '🎬模擬'}</span>·
-                      <span>{(trail.timerMode ?? 'stopwatch') === 'countdown' && trail.timeLimitMin
-                        ? `⏳限時${trail.timeLimitMin}分` : '⏱計時'}</span>·
-                      <span>{trail.quizMode !== false ? '✏️判斷題' : '👁觀察'}</span>·
-                      <span>{trail.id}</span>
-                    </p>
-                    {(getBestTimeMs(trail.id) != null || trapSteps(trail).length > 0) && (
-                      <p className="text-[10px] mt-0.5">
-                        {getBestTimeMs(trail.id) != null && <span className="text-gold">🏅最佳 {formatDuration(getBestTimeMs(trail.id)!)}</span>}
-                        {trapSteps(trail).length > 0 && <span className="text-red ml-2">⚠️{trapSteps(trail).length}陷阱</span>}
-                      </p>
+              <motion.div
+                key={trail.id}
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(i * 0.04, 0.2) }}
+                className="card overflow-hidden"
+              >
+                <button onClick={() => nav(`/leader/create?edit=${trail.id}`)} className="w-full text-left px-3.5 pt-3 pb-2">
+                  <div className="flex items-start gap-3">
+                    <div className="flex -space-x-2 shrink-0 pt-0.5">
+                      {trail.steps.slice(0, 3).map((s, k) => (
+                        <span key={k} className="w-7 h-7 rounded-full border border-ink/10 bg-[#efe4cd] flex items-center justify-center overflow-hidden">
+                          <SignSVG signId={s.signId} size={26} glow={false} />
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[13.5px] font-medium text-ink truncate">{trail.name}</h3>
+                      <p className="font-mono text-[9px] text-ink-4 mt-0.5">{trail.id}</p>
+                    </div>
+                    <span className="font-mono text-[9px] text-ink-4 border border-ink/12 rounded px-1.5 py-0.5 shrink-0">
+                      {sum.steps} 站
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    {sum.ar > 0 ? (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border border-forest/25 bg-forest/8 text-forest">
+                        AR {sum.ar}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border border-clay/30 bg-clay/5 text-clay-2 flex items-center gap-1">
+                        <AlertTriangle size={9} /> 未放置
+                      </span>
+                    )}
+                    {sum.traps > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded border border-clay/30 text-clay-2">陷阱 {sum.traps}</span>}
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border border-ink/15 text-ink-3">
+                      {(trail.timerMode ?? 'stopwatch') === 'countdown' ? `限時 ${trail.timeLimitMin} 分` : '計時'}
+                    </span>
+                    {trail.quizMode !== false && <span className="text-[9px] px-1.5 py-0.5 rounded border border-ink/15 text-ink-3">判斷題</span>}
+                    {best != null && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded border border-gold/35 text-gold flex items-center gap-1">
+                        <Trophy size={9} /> {formatDuration(best)}
+                      </span>
                     )}
                   </div>
-                </div>
-                {/* Steps preview */}
-                <div className="px-3 pb-2 flex items-center gap-1 overflow-x-auto">
-                  {trail.steps.map((step, j) => {
-                    const s = getSignById(step.signId);
-                    const dirArrow = step.direction === 'left' ? '←' : step.direction === 'right' ? '→' : step.direction === 'forward' ? '↑' : '';
-                    return (
-                      <React.Fragment key={j}>
-                        {j > 0 && <ArrowRight size={10} className="text-steel shrink-0" />}
-                        <div className="shrink-0 flex flex-col items-center">
-                          <SignSVG signId={step.signId} size={28} glow={false} />
-                          <span className="text-[7px] text-steel mt-0.5 text-center leading-tight">
-                            {dirArrow}{s?.nameZh}
-                            {step.paces != null && step.paces > 0 ? ` ${step.paces}步` : ''}
-                          </span>
-                        </div>
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-                <div className="grid grid-cols-3 border-t border-cyan/5">
-                  <button onClick={() => handleCopy(trail)}
-                    className={`py-2.5 flex items-center justify-center gap-1.5 text-xs font-heading font-medium transition-colors ${copiedTag === `code-${trail.id}` ? 'text-green bg-green/5' : 'text-cyan hover:bg-cyan/5'}`}>
-                    {copiedTag === `code-${trail.id}` ? <Check size={14} /> : <Copy size={14} />}{copiedTag === `code-${trail.id}` ? '已複製' : '代碼'}
+                </button>
+
+                <div className="flex border-t border-ink/10">
+                  <button onClick={() => nav(`/leader/place/${trail.id}`)} className="press flex-1 py-2.5 text-[10.5px] text-forest flex items-center justify-center gap-1">
+                    <Crosshair size={13} /> 放置
                   </button>
-                  <button onClick={() => openShare(trail)}
-                    className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-heading font-medium text-gold hover:bg-gold/5 transition-colors border-l border-cyan/5">
-                    <QrCode size={14} />QR分享
+                  <span className="w-px bg-ink/10 my-2" />
+                  <button onClick={() => openShare(trail)} className="press flex-1 py-2.5 text-[10.5px] text-forest flex items-center justify-center gap-1">
+                    <Share2 size={13} /> 分享
                   </button>
-                  <button onClick={() => setConfirmDelete(trail.id)}
-                    className="py-2.5 flex items-center justify-center gap-1.5 text-xs font-heading font-medium text-red hover:bg-red/5 transition-colors border-l border-cyan/5">
-                    <Trash2 size={14} />刪除
+                  <span className="w-px bg-ink/10 my-2" />
+                  <button onClick={() => nav(`/play/${trail.id}?name=測試`)} className="press flex-1 py-2.5 text-[10.5px] text-ink-2 flex items-center justify-center gap-1">
+                    <Users size={13} /> 預覽
+                  </button>
+                  <span className="w-px bg-ink/10 my-2" />
+                  <button onClick={() => setConfirmDelete(trail.id)} className="press flex-1 py-2.5 text-[10.5px] text-clay-2 flex items-center justify-center gap-1">
+                    <Trash2 size={13} /> 刪除
                   </button>
                 </div>
               </motion.div>
@@ -161,80 +204,67 @@ const LeaderPage: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-navy-800/40 rounded-2xl p-4 border border-cyan/5 space-y-1.5">
-        <h3 className="font-heading font-semibold text-xs text-ice-dim">📋 使用說明</h3>
-        <ol className="text-[11px] text-steel space-y-0.5 list-decimal list-inside">
-          <li>建立路線 → 按順序加入符號，設定箭頭方向及隱藏信物</li>
-          <li>可設定一個防迷路安全點／集合點；不要標示符號位置</li>
-          <li>分享「完整路線代碼」或 QR Code 給隊員（QR 會自動帶入路線）</li>
-          <li>隊員掃描 QR → 輸入名稱 → 開始追蹤；地圖只顯示自己位置和安全點</li>
-          <li>路線儲存在瀏覽器 localStorage，<strong className="text-steel-light">72小時後自動清除</strong></li>
-        </ol>
-      </div>
+      <Note tone="warn">
+        符號座標只喺觸發半徑內先會俾隊員見到。分享 JSON 前請確認：<strong>唔好</strong>預先貼出符號位置或路線圖。
+      </Note>
 
-      <AnimatePresence>
+      {/* 分享 */}
+      <Sheet open={!!shareTrail} onClose={() => setShareTrail(null)} title={shareTrail ? `分享「${shareTrail.name}」` : ''}>
         {shareTrail && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShareTrail(null)} />
-            <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="relative bg-navy-900 rounded-3xl border border-cyan/20 p-5 w-full max-w-sm max-h-[88vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="font-heading font-bold text-ice">分享路線</h3>
-                  <p className="text-[10px] text-steel">{shareTrail.name} · {shareTrail.id}</p>
-                </div>
-                <button onClick={() => setShareTrail(null)} className="p-1 text-steel hover:text-ice"><X size={20} /></button>
+          <div className="space-y-3.5">
+            <div className="flex justify-center">
+              <div className="p-3 rounded-2xl bg-[#fbf5e7] border border-ink/15 shadow-sm">
+                {qr ? <img src={qr} alt="路線 QR" className="w-[210px] h-[210px]" /> : (
+                  <div className="w-[210px] h-[210px] flex items-center justify-center px-4 text-center text-ink-4 text-[10px] leading-relaxed">
+                    {qrErr || 'QR 產生中…'}
+                  </div>
+                )}
               </div>
+            </div>
+            <p className="text-center text-[10px] text-ink-3 -mt-1">隊員用手機掃描即可匯入路線同符號座標</p>
 
-              <div className="bg-white rounded-2xl p-3 flex items-center justify-center min-h-[284px]">
-                {qrDataUrl ? <img src={qrDataUrl} alt="Route QR Code" className="w-[260px] h-[260px]" /> : <p className="text-navy-900 text-sm">正在產生 QR Code...</p>}
-              </div>
-              {shareErr && <p className="mt-2 text-[11px] text-red text-center">{shareErr}</p>}
-              <p className="mt-3 text-[11px] text-steel leading-relaxed text-center">
-                隊員掃描後會進入任務簡報，可見計時模式及最佳時間；地圖只作定位防迷路，符號要行到觸發才會標示。
-              </p>
+            <div className="rounded-xl border border-ink/12 bg-paper-2/50 p-3">
+              <p className="stamp text-ink-4 mb-1">路線代碼</p>
+              <p className="font-mono text-[12px] text-ink break-all leading-relaxed">{shareTrail.id}</p>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2 mt-4">
-                <button onClick={() => copyText(shareLink, `link-${shareTrail.id}`)}
-                  className="py-2.5 rounded-xl bg-cyan/10 text-cyan border border-cyan/20 text-xs font-heading font-semibold flex items-center justify-center gap-1.5">
-                  {copiedTag === `link-${shareTrail.id}` ? <Check size={14} /> : <LinkIcon size={14} />}{copiedTag === `link-${shareTrail.id}` ? '已複製' : '複製連結'}
-                </button>
-                <button onClick={() => copyText(shareCode, `modal-code-${shareTrail.id}`)}
-                  className="py-2.5 rounded-xl bg-navy-800 text-steel-light border border-steel/10 text-xs font-heading font-semibold flex items-center justify-center gap-1.5">
-                  {copiedTag === `modal-code-${shareTrail.id}` ? <Check size={14} /> : <Share2 size={14} />}{copiedTag === `modal-code-${shareTrail.id}` ? '已複製' : '複製代碼'}
-                </button>
-              </div>
-              <button onClick={downloadQr} disabled={!qrDataUrl}
-                className="w-full mt-2 py-2.5 rounded-xl bg-gold/10 text-gold border border-gold/20 text-xs font-heading font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40">
-                <Download size={14} />下載 QR 圖片
-              </button>
-            </motion.div>
-          </motion.div>
+            <div className="grid grid-cols-2 gap-2">
+              <Btn variant="secondary" icon={<Copy size={14} />} onClick={() => copy(shareLink(shareTrail), 'link')}>
+                {copied === 'link' ? '已複製' : '複製連結'}
+              </Btn>
+              <Btn variant="secondary" icon={<FileJson size={14} />} onClick={() => copy(trailToJson(shareTrail), 'json')}>
+                {copied === 'json' ? '已複製' : '複製 JSON'}
+              </Btn>
+              <Btn variant="ghost" icon={<Download size={14} />} onClick={() => downloadJson(shareTrail)}>下載 JSON</Btn>
+              <Btn variant="ghost" icon={<Link2 size={14} />} onClick={() => copy(encodeTrail(shareTrail), 'code')}>
+                {copied === 'code' ? '已複製' : '複製代碼'}
+              </Btn>
+            </div>
+
+            <Btn icon={<Share2 size={15} />} onClick={() => { void shareFile(shareTrail); }}>
+              用系統分享 JSON 檔
+            </Btn>
+
+            <div className="flex items-center gap-1.5 text-[9.5px] text-ink-4 justify-center">
+              <QrCode size={11} /> JSON 包含符號 GPS 座標，請只分享俾自己隊員
+            </div>
+          </div>
         )}
-      </AnimatePresence>
+      </Sheet>
 
-      <AnimatePresence>
-        {confirmDelete && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-navy-900 rounded-2xl border border-red/20 p-5 w-full max-w-xs text-center">
-              <Trash2 size={28} className="text-red mx-auto mb-3" />
-              <h3 className="font-heading font-bold text-ice text-base mb-1">確認刪除</h3>
-              <p className="text-steel text-sm mb-4">此操作無法還原</p>
-              <div className="flex gap-2">
-                <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2.5 bg-navy-800 text-steel rounded-xl font-heading font-semibold text-sm">取消</button>
-                <button onClick={() => handleDelete(confirmDelete)} className="flex-1 py-2.5 bg-red/10 text-red border border-red/20 rounded-xl font-heading font-semibold text-sm">確認刪除</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <p className="text-center text-[9px] text-steel pt-3 tracking-widest">COPYRIGHT © 2026 SCOUT SYSTEM</p>
+      {/* 刪除確認 */}
+      <Sheet open={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="刪除路線？">
+        <p className="text-[12px] text-ink-3 leading-relaxed">
+          呢個動作會刪除路線同已錨定嘅符號座標，無法復原。
+        </p>
+        <div className="grid grid-cols-2 gap-2 mt-4">
+          <Btn variant="ghost" onClick={() => setConfirmDelete(null)}>取消</Btn>
+          <Btn variant="danger" icon={<Trash2 size={14} />} onClick={() => {
+            if (confirmDelete) { deleteTrail(confirmDelete); refresh(); }
+            setConfirmDelete(null);
+          }}>刪除</Btn>
+        </div>
+      </Sheet>
     </div>
   );
 };

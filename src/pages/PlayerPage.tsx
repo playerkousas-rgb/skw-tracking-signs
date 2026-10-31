@@ -1,158 +1,235 @@
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Compass, ClipboardPaste, LogIn, History, Gift, QrCode, Timer as TimerIcon, Hourglass } from 'lucide-react';
-import { getTrailById, decodeTrail, saveTrail, getAllResults, formatDuration, isFieldTrail } from '../lib/trailStore';
+import {
+  Compass, QrCode, ClipboardPaste, ArrowRight, FileJson, Upload, Clock, Trophy, AlertTriangle, User, Sparkles,
+} from 'lucide-react';
+import QrScanner from '../components/QrScanner';
+import {
+  decodeTrail, saveTrail, getTrailById, formatDuration, getAllResults, trailSummary, trailFileName, Trail,
+  getCurrentPosition,
+} from '../lib/trailStore';
+import { createDemoTrail } from '../lib/demo';
+import { Btn, Card, Empty, Note, PageHeader } from '../components/ui';
 
 const PlayerPage: React.FC = () => {
   const nav = useNavigate();
   const [sp] = useSearchParams();
-  const [code, setCode] = useState(sp.get('code') || '');
-  const [playerName, setPlayerName] = useState('');
+  const [code, setCode] = useState(sp.get('code') ?? '');
+  const [playerName, setPlayerName] = useState(() => localStorage.getItem('skw_player_name') ?? '');
   const [error, setError] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [preview, setPreview] = useState<Trail | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const results = getAllResults().slice().reverse().slice(0, 4);
 
-  useEffect(() => {
-    const codeFromUrl = sp.get('code');
-    if (codeFromUrl) {
-      setCode(codeFromUrl);
-      setError('');
-    }
-  }, [sp]);
+  const resolve = (raw: string): Trail | null => {
+    const text = raw.trim();
+    if (!text) return null;
+    const decoded = decodeTrail(text);
+    if (decoded) return decoded;
+    return getTrailById(text) ?? null;
+  };
 
-  const handleJoin = () => {
+  const onChangeCode = (v: string) => {
+    setCode(v);
     setError('');
-    if (!playerName.trim()) { setError('請輸入你的代號（隊員名稱）'); return; }
-    if (!code.trim()) { setError('請輸入路線代碼'); return; }
+    setPreview(resolve(v));
+  };
 
-    const input = code.trim();
+  const handleQr = (text: string) => {
+    setScanning(false);
+    onChangeCode(text);
+    const found = resolve(text);
+    if (!found) setError('QR 內容唔似路線資料，請確認係領袖分享嘅碼');
+  };
 
-    // Encoded full trail code (from copy/paste or QR link)
-    if (input.length > 40 || input.includes('eyJ')) {
-      const decoded = decodeTrail(input);
-      if (decoded) { saveTrail(decoded); nav(`/play/${decoded.id}?name=${encodeURIComponent(playerName.trim())}`); return; }
-      setError('路線代碼格式無效，請檢查是否完整複製或重新掃描 QR');
-      return;
+  const handleFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      setCode(text);
+      const found = resolve(text);
+      setPreview(found);
+      if (!found) setError('JSON 格式唔正確');
+    } catch {
+      setError('讀取檔案失敗');
     }
-
-    // Trail ID only works on the same browser/device that created or imported the trail.
-    const trail = getTrailById(input);
-    if (!trail) { setError('找不到此路線 — 若你使用另一部手機，請掃描QR或貼上「完整路線代碼」'); return; }
-    nav(`/play/${trail.id}?name=${encodeURIComponent(playerName.trim())}`);
   };
 
-  const handlePaste = async () => {
-    try { const text = await navigator.clipboard.readText(); setCode(text.trim()); setError(''); }
-    catch { setError('無法讀取剪貼簿，請手動貼上'); }
+  const join = () => {
+    setError('');
+    if (!playerName.trim()) { setError('請輸入你嘅代號'); return; }
+    const found = preview ?? resolve(code);
+    if (!found) { setError('搵唔到路線 — 請重新掃 QR 或貼上完整 JSON'); return; }
+    localStorage.setItem('skw_player_name', playerName.trim());
+    saveTrail(found);
+    nav(`/play/${found.id}?name=${encodeURIComponent(playerName.trim())}`);
   };
 
-  const recentResults = getAllResults().slice(-5).reverse();
-  const cameFromQr = Boolean(sp.get('code'));
-  const previewTrail = (() => {
-    const input = code.trim();
-    if (!input) return null;
-    if (input.length > 40 || input.includes('eyJ')) return decodeTrail(input);
-    return getTrailById(input) ?? null;
-  })();
+  const paste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      onChangeCode(text);
+    } catch {
+      setError('無法讀取剪貼簿，請長按貼上');
+    }
+  };
+
+  const sum = preview ? trailSummary(preview) : null;
+
+  const playDemo = async () => {
+    setError('');
+    const name = playerName.trim() || '示範隊員';
+    localStorage.setItem('skw_player_name', name);
+    let origin: { lat: number; lng: number } | null = null;
+    try { const p = await getCurrentPosition(); origin = { lat: p.lat, lng: p.lng }; } catch { /* 用預設座標 */ }
+    const demo = createDemoTrail(origin);
+    saveTrail(demo);
+    nav(`/play/${demo.id}?name=${encodeURIComponent(name)}`);
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="text-center pt-2 pb-1">
-        <Compass size={36} className="text-cyan mx-auto mb-2" />
-        <h1 className="text-xl font-heading font-bold text-ice glow-cyan">沿途追蹤</h1>
-        <p className="text-xs text-steel mt-1">輸入路線代碼，靠追蹤符號指引完成任務</p>
-      </div>
+    <div className="space-y-3.5 pb-4">
+      <PageHeader
+        kicker="PLAYER MODE"
+        title="出發追蹤"
+        sub="匯入領袖嘅路線。符號位置唔會預先顯示 — 行到現場，舉機先會見到。"
+        right={<span className="shrink-0 mt-1 text-[10px] text-ink-3 border border-ink/15 rounded-full px-2 py-1 flex items-center gap-1"><User size={11} /> 隊員</span>}
+      />
 
-      {/* 已填入代碼時顯示任務預覽 */}
-      {previewTrail && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          className="p-3 bg-navy-800/60 rounded-xl border border-cyan/10 space-y-1.5">
-          <p className="text-sm font-heading font-semibold text-ice">{previewTrail.name}</p>
-          <div className="flex flex-wrap gap-1.5 text-[10px]">
-            <span className="px-2 py-1 rounded-full bg-cyan/10 text-cyan border border-cyan/20">
-              {isFieldTrail(previewTrail) ? '📍 實地追蹤 GPS' : '🎬 模擬追蹤'}
-            </span>
-            <span className={`px-2 py-1 rounded-full border ${previewTrail.timerMode === 'countdown' && previewTrail.timeLimitMin
-              ? 'bg-red/10 text-red border-red/20' : 'bg-green/10 text-green border-green/20'} flex items-center gap-1`}>
-              {previewTrail.timerMode === 'countdown' && previewTrail.timeLimitMin
-                ? <><Hourglass size={10} />限時 {previewTrail.timeLimitMin} 分鐘</>
-                : <><TimerIcon size={10} />計時挑戰</>}
-            </span>
-            <span className="px-2 py-1 rounded-full bg-gold/10 text-gold border border-gold/20">
-              {previewTrail.steps.filter(s => !s.trap).length} 站
-            </span>
-          </div>
-        </motion.div>
-      )}
-
-      {cameFromQr && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          className="p-3 bg-green/5 border border-green/10 rounded-xl text-green text-xs flex items-center gap-2">
-          <QrCode size={15} className="shrink-0" /> 已由 QR Code 帶入路線代碼，請輸入你的代號後開始。
-        </motion.div>
-      )}
-
-      <div>
-        <label className="block text-xs text-steel mb-1.5 font-heading">你的代號</label>
-        <input value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="例如：小狼A、隊長"
-          className="w-full px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 transition-colors text-sm" />
-      </div>
-
-      <div>
-        <label className="block text-xs text-steel mb-1.5 font-heading">路線代碼</label>
-        <div className="flex gap-2">
-          <input value={code} onChange={e => setCode(e.target.value)} placeholder="貼上完整路線代碼或輸入本機路線ID"
-            className="flex-1 px-4 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-ice placeholder:text-steel focus:outline-none focus:border-cyan/30 transition-colors text-sm font-mono" />
-          <button onClick={handlePaste} className="px-3 py-3 bg-navy-800/70 rounded-xl border border-cyan/10 text-steel hover:text-cyan transition-colors"><ClipboardPaste size={18} /></button>
-        </div>
-      </div>
-
-      {error && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          className="p-3 bg-red/5 border border-red/10 rounded-xl text-red text-xs text-center">{error}</motion.div>
-      )}
-
-      <button onClick={handleJoin}
-        className="w-full py-4 bg-gradient-to-r from-green/20 to-cyan/10 text-cyan rounded-2xl font-heading font-bold text-lg border border-cyan/20 box-glow-cyan card-hover flex items-center justify-center gap-2">
-        <LogIn size={20} />開始追蹤
-      </button>
-
-      {recentResults.length > 0 && (
+      <Card className="p-3.5 space-y-3">
         <div>
-          <h3 className="text-xs text-steel font-heading mb-2 flex items-center gap-1.5"><History size={12} />最近追蹤記錄</h3>
-          <div className="space-y-1">
-            {recentResults.map((r, i) => (
-              <div key={i} className="bg-navy-800/40 rounded-lg px-3 py-2 flex items-center justify-between">
-                <div className="min-w-0">
-                  <span className="text-xs text-ice font-heading">
-                    {r.timeUp ? '⏳' : r.success ? '✅' : '❌'} {r.playerName}
-                  </span>
-                  <span className="text-[10px] text-steel ml-2">{r.trailId}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[10px] text-steel font-mono flex items-center gap-0.5">
-                    <TimerIcon size={10} />{formatDuration(r.elapsedMs)}
-                  </span>
-                  <span className={`text-xs font-heading font-bold ${r.correctSteps === r.totalSteps ? 'text-green' : r.correctSteps >= r.totalSteps / 2 ? 'text-gold' : 'text-red'}`}>
-                    {r.correctSteps}/{r.totalSteps}
-                  </span>
-                </div>
+          <label className="stamp text-ink-4 block mb-1">你嘅代號</label>
+          <input
+            value={playerName}
+            onChange={e => setPlayerName(e.target.value)}
+            placeholder="例：小狼 3 號"
+            className="w-full h-11 px-3 rounded-xl border border-ink/15 bg-[#fbf5e7] outline-none focus:border-forest/50 text-[13px] placeholder:text-ink-4"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="stamp text-ink-4">路線代碼 / JSON</label>
+            <div className="flex gap-1.5">
+              <button onClick={paste} className="text-[9.5px] text-ink-3 border border-ink/15 rounded px-1.5 py-0.5 flex items-center gap-1">
+                <ClipboardPaste size={10} /> 貼上
+              </button>
+              <button onClick={() => fileRef.current?.click()} className="text-[9.5px] text-ink-3 border border-ink/15 rounded px-1.5 py-0.5 flex items-center gap-1">
+                <Upload size={10} /> 檔案
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={code}
+            onChange={e => onChangeCode(e.target.value)}
+            rows={3}
+            placeholder="貼上領袖俾你嘅完整 JSON 或路線代碼…"
+            className="w-full px-3 py-2.5 rounded-xl border border-ink/15 bg-[#fbf5e7] outline-none focus:border-forest/50 text-[11px] font-mono leading-relaxed placeholder:text-ink-4 placeholder:font-body resize-none"
+          />
+          <input ref={fileRef} type="file" accept=".json,application/json,text/plain"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ''; }} />
+        </div>
+
+        <button
+          onClick={() => setScanning(true)}
+          className="press w-full h-12 rounded-2xl bg-forest text-paper text-[13px] font-semibold flex items-center justify-center gap-2"
+        >
+          <QrCode size={16} /> 掃描領袖 QR 即入
+        </button>
+
+        <button
+          onClick={() => { void playDemo(); }}
+          className="press w-full h-10 rounded-2xl border border-forest/25 bg-forest/5 text-forest text-[11.5px] flex items-center justify-center gap-1.5"
+        >
+          <Sparkles size={13} /> 未有路線？原地試玩示範路線
+        </button>
+      </Card>
+
+      {preview && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card p-3.5">
+          <div className="flex items-center gap-2">
+            <span className="stamp text-forest">ROUTE FOUND</span>
+            <span className="h-px flex-1 bg-ink/10" />
+            <span className="font-mono text-[9px] text-ink-4">{preview.id}</span>
+          </div>
+          <h3 className="text-[15px] text-ink mt-1.5">{preview.name}</h3>
+          <div className="grid grid-cols-4 gap-1 mt-2.5">
+            {[
+              { l: '站數', v: sum?.steps ?? 0 },
+              { l: 'AR', v: sum?.ar ?? 0 },
+              { l: '距離', v: `${(sum?.distanceKm ?? 0).toFixed(2)}km` },
+              { l: '限時', v: preview.timerMode === 'countdown' ? `${preview.timeLimitMin}分` : '計時' },
+            ].map(s => (
+              <div key={s.l} className="rounded-lg border border-ink/10 bg-paper-2/50 py-1.5 text-center">
+                <p className="font-mono text-[12px] font-bold text-ink-2">{s.v}</p>
+                <p className="text-[8.5px] text-ink-4 mt-0.5">{s.l}</p>
               </div>
             ))}
           </div>
+          {preview.leaderNote && (
+            <p className="text-[10.5px] text-ink-3 mt-2 leading-relaxed">📝 {preview.leaderNote}</p>
+          )}
+          {sum && sum.ar < sum.steps && (
+            <p className="text-[9px] text-clay-2 mt-2 flex items-center gap-1">
+              <AlertTriangle size={10} /> 有 {sum.steps - sum.ar} 個符號未錨定，只會用文字提示
+            </p>
+          )}
+          <Btn className="mt-3" onClick={join} icon={<ArrowRight size={16} />}>開始任務</Btn>
+        </motion.div>
+      )}
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/8 px-3 py-2.5 text-[11px] text-clay-2">
+          <AlertTriangle size={14} className="shrink-0 mt-0.5" />{error}
         </div>
       )}
 
-      <div className="bg-navy-800/40 rounded-xl p-3 border border-cyan/5">
-        <p className="text-[10px] text-steel leading-relaxed">
-          💡 <strong className="text-steel-light">玩法：</strong>領袖給你 QR Code 或完整路線代碼 →
-          任務簡報（留意計時／倒計時模式）→ 沿途觀察符號＋箭頭方向 →
-          判斷應做什麼 → 答對後<Gift size={10} className="inline text-gold" />揭露隱藏信物 →
-          跟隨指示前進直到「已回家」。地圖只顯示<strong className="text-steel-light">你的位置</strong>（防迷路），
-          行到符號附近才會觸發並標示 — 不會預先顯示目標在哪，這是追蹤，不是尋寶。
-        </p>
-      </div>
+      {!preview && (
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[13px] text-ink-2">最近完成</h2>
+            <span className="h-px flex-1 bg-ink/10" />
+          </div>
+          {results.length === 0 ? (
+            <Empty icon={<Compass size={20} />} title="未完成過任務" sub="完成路線後，成績同用時會顯示喺呢度。" />
+          ) : (
+            results.map((r, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-ink/12 bg-[#faf3e3]/70 px-3 py-2.5">
+                <span className={`w-8 h-8 rounded-full flex items-center justify-center ${r.success ? 'bg-forest/10 text-forest' : 'bg-clay/10 text-clay-2'}`}>
+                  {r.success ? <Trophy size={14} /> : <AlertTriangle size={14} />}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] text-ink truncate">{r.playerName}</p>
+                  <p className="text-[9px] text-ink-4 font-mono">
+                    {r.correctSteps}/{r.totalSteps} 正確 · {r.timeUp ? '超時' : '完成'}
+                  </p>
+                </div>
+                <span className="font-mono text-[11px] text-ink-3 flex items-center gap-1">
+                  <Clock size={10} />{formatDuration(r.elapsedMs)}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
-      <p className="text-center text-[9px] text-steel pt-2 tracking-widest">COPYRIGHT © 2026 SCOUT SYSTEM</p>
+      <Note>
+        領袖需要將 <strong className="text-ink-2">JSON 檔</strong>（例如 <span className="font-mono text-[10px]">{preview ? trailFileName(preview) : 'route.json'}</span>）
+        或 QR 交俾你。入到路線之後，手機全程唔會顯示下一個符號嘅位置。
+      </Note>
+
+      {scanning && (
+        <QrScanner
+          onClose={() => setScanning(false)}
+          onResult={handleQr}
+        />
+      )}
+
+      <div className="flex items-center justify-center gap-1.5 text-[9px] font-mono tracking-widest text-ink-4 pt-1">
+        <FileJson size={10} /> JSON ROUTE · OFFLINE READY
+      </div>
     </div>
   );
 };
