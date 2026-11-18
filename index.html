@@ -2,6 +2,17 @@
 <html lang="zh-HK">
   <head>
     <meta charset="UTF-8" />
+    <script src="/store_gate_v1.0.js"></script>
+    <script>
+      initStoreGate({
+        appKey: 'skw-tracking-signs',
+        mode: 'entry-gate',
+        portalIds: ['appstore'],
+        silentPortalIds: ['library'],
+        allowStandalone: true,
+        autoRedirectSeconds: 0
+      });
+    </script>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />

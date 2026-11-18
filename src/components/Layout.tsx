@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BookOpen, Compass, PenTool, Map } from 'lucide-react';
 
@@ -12,6 +12,14 @@ const items = [
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const nav = useNavigate();
   const loc = useLocation();
+  const storeSupportRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    const gate = (window as typeof window & { ScoutStoreGate?: { getAppStoreUrl: (slug: string) => string } }).ScoutStoreGate;
+    if (!storeSupportRef.current || !gate) return;
+    storeSupportRef.current.href = gate.getAppStoreUrl('skw-tracking-signs');
+    storeSupportRef.current.hidden = false;
+  }, []);
 
   const isActive = (path: string) =>
     path === '/' ? loc.pathname === '/' : loc.pathname.startsWith(path);
@@ -19,6 +27,20 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="min-h-screen paper-grain flex flex-col">
       <div className="h-safe-top" />
+      <header className="mx-auto flex w-full max-w-[520px] justify-end px-4 pt-2">
+        <a
+          ref={storeSupportRef}
+          id="storeSupportTop"
+          className="support-btn inline-flex min-h-10 items-center justify-center rounded-full border border-forest/25 bg-paper-2/80 px-3 text-xs font-medium text-forest hover:bg-paper-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+          target="_blank"
+          rel="noopener"
+          hidden
+          aria-label="前往主站讚好或收藏此程式（開新分頁）"
+          title="讚好／收藏"
+        >
+          ❤️ 讚好／收藏
+        </a>
+      </header>
       <main className="flex-1 pb-[76px]">
         <div className="mx-auto w-full max-w-[520px] px-4 pt-3">{children}</div>
       </main>

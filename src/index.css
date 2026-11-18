@@ -49,6 +49,14 @@
 
 * { -webkit-tap-highlight-color: transparent; }
 
+.support-btn[hidden], [hidden] { display: none !important; }
+.support-btn { min-height: 40px; }
+.support-btn:focus-visible { outline: 2px solid var(--color-forest); outline-offset: 2px; }
+
+@media print {
+  .support-btn { display: none !important; }
+}
+
 html, body, #root { height: 100%; margin: 0; padding: 0; }
 
 body {

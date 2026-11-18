@@ -9,6 +9,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "check": "tsc -b && eslint .",
+    "preflight": "node scripts/preflight.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
